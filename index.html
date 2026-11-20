@@ -941,7 +941,7 @@ function parse(a){
  return{rows,D:{P:[...new Set(rows.map(r=>r.p))].sort(),Au:['Privé','Étatique','Conventionné'],Nv:['Primaire','Secondaire','Tertiaire'],th,lab,q,d0:iso0,gen:new Date().toLocaleDateString('fr-FR')}}}
 /* ---------- état, synchronisation, rendu ---------- */
 const KEY='pci_eval',INTRO='Bienvenue dans le rapport des évaluations PCI au cours de la 17ème épidémie de MVE en RDC. Chaque évaluation porte sur 62 items, notés un point chacun et regroupés en 17 thématiques. Le score correspond à la proportion d’items satisfaits. Pour chaque établissement, seule l’évaluation la plus récente est retenue.',FS=()=>({tab:0,p:'',z:'',lo:null,hi:null,pt:'',pq:'',pl:'',au:'',cas:'',q:'',nv:'',st:''});
-let SY=null,LC=null,MODE='sync',UPD='';
+let SY=null,LC=null,MODE='sync',UPD='',AUTO=false;
 const pack=res=>({rows:res.rows,D:res.D,MAXD:Math.max(...res.rows.map(r=>r.d))});
 function mapSync(j){const rows=j.rows.map(r=>({p:j.P[r[0]],z:j.Z[r[1]],au:j.Au[r[2]],nv:j.Nv[r[3]],cas:r[4],sc:r[5],d:r[6],b:r[7],f:r[8],n:r[9],fb:r[13]||'',la:r[10],lo:r[11],nm:r[12],as:r[14]||'',lt:r[15]==null?null:r[15],tw:r[16]==null?null:r[16],ft:r[17]||0,ev:r[18]||null}));return{rows,D:{P:j.P,Au:j.Au,Nv:j.Nv,th:j.th,lab:j.lab,q:j.q,d0:j.d0,gen:new Date(j.upd||Date.now()).toLocaleDateString('fr-FR'),src:'Synchronisation Kobo'}}}
 function msg(t,good){const m=$('#evmsg');if(m){m.textContent=t||'';m.style.color=good?'var(--pri)':'var(--acc)'}}
@@ -954,11 +954,11 @@ function top(){const st=MODE==='local'?'Mode : mes données locales (visibles su
 <div class="row"><label>XLS <input type="file" accept=".xlsx,.xls" onchange="EV.file(this)"></label><label>CSV <input type="file" accept=".csv" onchange="EV.file(this)"></label></div></section>`}
 function render(){document.dispatchEvent(new Event('evr'));const c=MODE==='local'&&LC?LC:SY;if(c){D=c.D;R=c.rows;MAXD=c.MAXD;TODAY=MAXD}else{D=null;R=[]}
  root.innerHTML=top()+(c?pciPage():'<div class="panel"><h2>Évaluations PCI des établissements de soins</h2><p class="mut">Aucune donnée disponible pour le moment : la synchronisation automatique depuis Kobo n’a pas encore fourni de fichier. Vous pouvez visualiser vos propres données avec « Mes données (XLS/CSV) ».</p></div>')}
-function apply(res,src){LC=pack(res);LC.D.src=src;MODE='local';try{localStorage.setItem(KEY,JSON.stringify(LC))}catch(e){}S=FS();render();msg(res.rows.length+' établissement(s) chargé(s) depuis '+src+'.',1)}
+function apply(res,src){LC=pack(res);LC.D.src=src;MODE='local';AUTO=false;try{localStorage.setItem(KEY,JSON.stringify(LC))}catch(e){}S=FS();render();msg(res.rows.length+' établissement(s) chargé(s) depuis '+src+'.',1)}
 async function loadFile(f){msg('Lecture de '+f.name+'…',1);
  try{if(!window.XLSX)throw Error('bibliothèque de lecture Excel non chargée');const csv=/\.csv$/i.test(f.name),wb=XLSX.read(csv?await f.text():await f.arrayBuffer(),{type:csv?'string':'array'}),a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,dateNF:'yyyy-mm-dd hh:mm:ss',defval:''});
   apply(parse(a),f.name)}catch(x){msg('Erreur de lecture : '+(x.message||x))}}
-async function sync(){try{const c=window.PCI_CODE&&PCI_CODE();if(!c)throw 0;const r=await fetch('evaluations.enc.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await PCI_DEC(await r.json(),c);if(!SY||j.upd!==UPD){SY=pack(mapSync(j));UPD=j.upd||'';render();try{window.SF&&SF.auto()}catch(e){}}}}catch(e){}if(!SY&&LC&&MODE==='sync'){MODE='local';render()}}
+async function sync(){try{const c=window.PCI_CODE&&PCI_CODE();if(!c)throw 0;const r=await fetch('evaluations.enc.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await PCI_DEC(await r.json(),c);if(!SY||j.upd!==UPD){SY=pack(mapSync(j));UPD=j.upd||'';if(AUTO){MODE='sync';AUTO=false}render();try{window.SF&&SF.auto()}catch(e){}}}}catch(e){}if(!SY&&LC&&MODE==='sync'){MODE='local';AUTO=true;render()}}
 function saveBlob(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);a.remove()},1500)}
 window.EVX={nc,ct,rr,hb,wrapT,mkPdf,mkPptx,NV,MR,FN,CO,TL,EMB,saveBlob};
 
@@ -992,7 +992,7 @@ window.EV={
  file(i){const f=i.files&&i.files[0];if(f)loadFile(f);i.value=''},
  tab(){return S.tab},
  tog(){PNopen=!PNopen;const p=$('#evpn');if(p)p.classList.toggle('hide',!PNopen)},
- back(){MODE='sync';S=FS();render()},
+ back(){MODE='sync';AUTO=false;S=FS();render()},
  exp(fmt){const s=$('#evrs'),rows=etabRows();if(!rows.length){s.textContent='Aucun établissement pour ces filtres.';return}
   const A=[['Établissement','Province','Zone de santé','Aire de santé','Autorité','Niveau','Nombre de lits','Prestataires formés en PCI','Évaluations','Score initial (%)','Dernier score (%)','Thématique critique'],...rows.map(r=>[r.nm,r.p,r.z,r.as||'',r.au,r.nv,r.lt==null?'':r.lt,r.ft&&r.tw!=null?r.tw:'',r.n,r.f,r.sc,crit(r)])],fn=evName('Details-ESS',rows);
   try{if(fmt=='xlsx'){if(!window.XLSX)throw Error('x');const ws=XLSX.utils.aoa_to_sheet(A),wb=XLSX.utils.book_new();ws['!cols']=[{wch:42},{wch:18},{wch:22},{wch:22},{wch:14},{wch:12},{wch:12},{wch:16},{wch:12},{wch:14},{wch:14},{wch:36}];XLSX.utils.book_append_sheet(wb,ws,'Détails ESS');saveBlob(new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fn+'.xlsx')}
