@@ -958,7 +958,7 @@ function apply(res,src){LC=pack(res);LC.D.src=src;MODE='local';AUTO=false;try{lo
 async function loadFile(f){msg('Lecture de '+f.name+'…',1);
  try{if(!window.XLSX)throw Error('bibliothèque de lecture Excel non chargée');const csv=/\.csv$/i.test(f.name),wb=XLSX.read(csv?await f.text():await f.arrayBuffer(),{type:csv?'string':'array'}),a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,dateNF:'yyyy-mm-dd hh:mm:ss',defval:''});
   apply(parse(a),f.name)}catch(x){msg('Erreur de lecture : '+(x.message||x))}}
-async function sync(){try{const c=window.PCI_CODE&&PCI_CODE();if(!c)throw 0;const r=await fetch('evaluations.enc.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await PCI_DEC(await r.json(),c);if(!SY||j.upd!==UPD){SY=pack(mapSync(j));UPD=j.upd||'';if(AUTO){MODE='sync';AUTO=false}render();try{window.SF&&SF.auto()}catch(e){}}}}catch(e){}if(!SY&&LC&&MODE==='sync'){MODE='local';AUTO=true;render()}}
+async function sync(){try{const c=window.PCI_CODE&&PCI_CODE();if(!c)throw 0;const r=await fetch('evaluations.enc.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await PCI_DEC(await r.json(),c);if(!SY||j.upd!==UPD){SY=pack(mapSync(j));UPD=j.upd||'';if(AUTO){MODE='sync';AUTO=false}render();try{window.SF&&window.SF.auto()}catch(e){}}}}catch(e){}if(!SY&&LC&&MODE==='sync'){MODE='local';AUTO=true;render()}}
 function saveBlob(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);a.remove()},1500)}
 window.EVX={nc,ct,rr,hb,wrapT,mkPdf,mkPptx,NV,MR,FN,CO,TL,EMB,saveBlob};
 
@@ -1037,7 +1037,7 @@ addEventListener('scroll',()=>{if(!rq)rq=requestAnimationFrame(prRef)},{passive:
 prb.onclick=()=>{const o=pro.classList.contains('hide');if(o)prFill();pro.classList.toggle('hide',!o);prb.setAttribute('aria-expanded',String(o))};
 pro.onclick=e=>{const b=e.target.closest('button[data-f]');if(!b)return;const f=b.dataset.f,k=pk();FM[k]=f;prFill();pro.classList.add('hide');prb.setAttribute('aria-expanded','false');
  if(k==='man'){const a=document.createElement('a');a.href='manuel/Manuel_pratique_Sitreps-Evaluations_PCI_MVE17.'+f;a.download='Manuel_pratique_Sitreps-Evaluations_PCI_MVE17.'+f;document.body.appendChild(a);a.click();a.remove();return}
- if(k==='evd')EV.exp(f);else if(cur==='sit')SF.run(f);else EV.rep(f)};
+ if(k==='evd')EV.exp(f);else if(cur==='sit')window.SF.run(f);else EV.rep(f)};
 const hd=document.querySelector('.hd');let hq=0;
 function hh(){hq=0;const p=hd.style.getPropertyValue('--p');hd.style.setProperty('--p','0');const h=hd.offsetHeight;hd.style.setProperty('--p',p||'0');document.querySelector('.hs').style.height=(h+6)+'px'}
 const hs=()=>{if(!hq)hq=requestAnimationFrame(hh)};addEventListener('resize',hs);addEventListener('load',hs);document.addEventListener('DOMContentLoaded',hs);hh();setTimeout(hh,300);
