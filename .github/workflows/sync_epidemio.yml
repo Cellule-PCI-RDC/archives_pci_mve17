@@ -1,0 +1,37 @@
+name: Actualiser l'actualité épidémiologique (INSP / INRB)
+on:
+  schedule: [{cron: "17 */6 * * *"}]   # toutes les 6 heures
+  workflow_dispatch:
+permissions: {contents: write}
+concurrency: {group: synchro-donnees, cancel-in-progress: false}
+jobs:
+  epi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install shapely
+      - name: Récupérer les données publiques INSP/INRB (dépôt INRB-UMIE/BDBV2026-Data)
+        run: |
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/INRB-UMIE/BDBV2026-Data.git inrb
+          git -C inrb sparse-checkout set --no-cone /build/long/ /build/drc_health_zones.geojson /data/aliases.csv
+      - name: Construire epi.json
+        run: python build_epidemio.py inrb/build inrb/data/aliases.csv epi_new.json
+      - name: Publier epi.json si les chiffres ont changé
+        run: |
+          python - <<'PY'
+          import json, os, shutil
+          new = json.load(open("epi_new.json", encoding="utf-8"))
+          try: old = json.load(open("epi.json", encoding="utf-8"))
+          except Exception: old = None
+          strip = lambda d: {k: v for k, v in (d or {}).items() if k != "built"}
+          if strip(new) != strip(old): shutil.move("epi_new.json", "epi.json"); print("epi.json mis à jour :", new["updated"])
+          else: os.remove("epi_new.json"); print("Aucun changement")
+          PY
+          rm -rf inrb
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          git add epi.json
+          git commit -m "Actualité épidémiologique (INSP/INRB)" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
