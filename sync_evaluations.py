@@ -28,6 +28,55 @@ def pick_lang(srv, h, uid):
         if t and re.search(r"(?i)fran|french|\bfr\b", str(t)): return t
     return tr[0] if tr and tr[0] else "_default"
 
+ES_NAME = "GitHub - evaluations PCI (ne pas supprimer)"
+
+def _sync_export(requests, srv, h, uid, body):
+    """Export synchrone Kobo : un « export enregistré » (export-settings) dont le fichier XLSX
+    se télécharge directement, sans attendre la file d'exports. Créé automatiquement s'il n'existe pas."""
+    base = f"{srv}/api/v2/assets/{uid}/export-settings/"
+    es_uid = (os.environ.get("KOBO_ES_ESS") or "").strip()
+    if not es_uid:
+        r = requests.get(base, headers=h, timeout=60); r.raise_for_status()
+        found = [e for e in r.json().get("results", []) if e.get("name") == ES_NAME]
+        if found:
+            es_uid = found[0]["uid"]
+        else:
+            cfg = {k: (str(v).lower() if isinstance(v, bool) else v) for k, v in body.items()}
+            cfg["fields"] = []
+            r = requests.post(base, json={"name": ES_NAME, "export_settings": cfg}, headers=h, timeout=60)
+            if r.status_code >= 400: raise RuntimeError(f"création de l'export enregistré refusée ({r.status_code}) : {r.text[:300]}")
+            es_uid = r.json()["uid"]
+            print("Export enregistré créé dans Kobo :", ES_NAME)
+    print("Export synchrone Kobo (export enregistré", es_uid + ")…")
+    r = requests.get(f"{base}{es_uid}/data.xlsx", headers=h, timeout=1200)
+    if r.status_code != 200 or r.content[:2] != b"PK":
+        raise RuntimeError(f"réponse inattendue ({r.status_code}) : {r.text[:300] if r.content[:2] != b'PK' else ''}")
+    return io.BytesIO(r.content)
+
+def _async_export(requests, srv, h, uid, body):
+    """Ancienne méthode : demande d'export puis attente (jusqu'à 25 min). En cas de délai dépassé,
+    réutilise l'export terminé le plus récent (données un peu moins fraîches plutôt qu'un échec)."""
+    base = f"{srv}/api/v2/assets/{uid}/exports/"
+    r = requests.post(base, json=body, headers=h, timeout=60); r.raise_for_status()
+    url = r.json()["url"]; j = {}
+    for _ in range(300):
+        j = requests.get(url, headers=h, timeout=60).json()
+        if j.get("status") == "complete": break
+        if j.get("status") == "error": raise RuntimeError("Export Kobo en erreur : " + str(j))
+        time.sleep(5)
+    else:
+        print("Délai dépassé pour le nouvel export Kobo : recherche du dernier export terminé…")
+        r = requests.get(base, headers=h, params={"limit": 50}, timeout=60); r.raise_for_status()
+        done = sorted([e for e in r.json().get("results", []) if e.get("status") == "complete" and e.get("result")],
+                      key=lambda e: e.get("date_created", ""), reverse=True)
+        if not done: raise RuntimeError("Délai dépassé pour l'export Kobo, et aucun export terminé disponible")
+        j = done[0]; print("Utilisation de l'export du", j.get("date_created"))
+    data = requests.get(j["result"], headers=h, timeout=600).content
+    if j.get("url") == url:
+        try: requests.delete(url, headers=h, timeout=60)   # ne pas accumuler les exports dans Kobo
+        except Exception: pass
+    return io.BytesIO(data)
+
 def kobo_export(uid):
     import requests
     srv = (os.environ.get("KOBO_SERVER") or "https://kf.kobotoolbox.org").rstrip("/")
@@ -38,15 +87,14 @@ def kobo_export(uid):
     print("Langue de l'export Kobo :", lang)
     body = {"type": "xls", "fields_from_all_versions": True, "group_sep": "/", "hierarchy_in_labels": False,
             "multiple_select": "both", "lang": lang}
-    r = requests.post(f"{srv}/api/v2/assets/{uid}/exports/", json=body, headers=h); r.raise_for_status()
-    url = r.json()["url"]
-    for _ in range(120):
-        j = requests.get(url, headers=h).json()
-        if j["status"] == "complete": break
-        if j["status"] == "error": sys.exit("Export Kobo en erreur : " + str(j))
-        time.sleep(5)
-    else: sys.exit("Délai dépassé pour l'export Kobo")
-    return io.BytesIO(requests.get(j["result"], headers=h).content)
+    try:
+        return _sync_export(requests, srv, h, uid, body)
+    except Exception as e:
+        print("Export synchrone indisponible :", e, "— passage à l'export classique.")
+    try:
+        return _async_export(requests, srv, h, uid, body)
+    except Exception as e:
+        sys.exit(str(e))
 
 def _n(t):
     import unicodedata
