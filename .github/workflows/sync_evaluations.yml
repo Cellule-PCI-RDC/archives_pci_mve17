@@ -1,0 +1,31 @@
+name: Synchroniser les évaluations PCI (Kobo)
+on:
+  schedule: [{cron: "0 */3 * * *"}]   # toutes les 3 heures
+  workflow_dispatch:
+permissions: {contents: write}
+concurrency: {group: synchro-donnees, cancel-in-progress: false}
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install pandas openpyxl requests cryptography
+      - name: Générer evaluations.enc.json (chiffré avec le code d'accès) depuis la base Kobo des évaluations
+        run: python sync_evaluations.py --uid-pci "$KOBO_UID_ESS" --sortie evaluations.enc.json
+        env:
+          KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+          ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+          ACCES_CODE: ${{ secrets.ACCES_CODE }}
+          KOBO_SERVER: ${{ vars.KOBO_SERVER }}
+          KOBO_UID_ESS: ${{ vars.KOBO_UID_ESS }}
+          KOBO_LANG: ${{ vars.KOBO_LANG }}
+      - name: Publier evaluations.enc.json (et retirer l'ancien fichier en clair)
+        run: |
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          git rm -q --ignore-unmatch evaluations.json
+          git add evaluations.enc.json
+          git commit -m "Synchronisation des évaluations PCI" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
