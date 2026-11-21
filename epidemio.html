@@ -42,6 +42,11 @@ h1{font-size:22px;margin:0;font-weight:650;letter-spacing:-.01em}
 .tabs a[aria-current="page"]{background:var(--text-primary);color:var(--surface-1)}
 .kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}
 @media (max-width:700px){.kpis{grid-template-columns:1fr 1fr}}
+:root{--app-navy:#1b2a4a}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--app-navy:#6f8bd1}}:root[data-theme="dark"]{--app-navy:#6f8bd1}
+.panel{background:var(--app-bg);border:1px solid var(--app-line);border-radius:14px;padding:0 0 14px;overflow:hidden;box-shadow:0 2px 10px rgba(27,42,74,.10);margin-bottom:16px}
+.panel>h2{margin:0 0 12px;padding:11px 16px;background:var(--app-navy);color:#fff;font:700 13px Calibri,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.panel>.kpis,.panel>.ksc{margin-left:16px;margin-right:16px}.panel>.kpis{margin-bottom:8px}.ksc{color:var(--app-mut);font-size:12.5px;margin:0}
+#map path.z{cursor:pointer}
 .k{background:var(--app-bg);border:1px solid var(--app-line);border-top:5px solid var(--app-mar);border-radius:14px;padding:10px 12px;box-shadow:0 2px 8px rgba(27,42,74,.08)}
 .k b{display:block;font-size:26px;line-height:1.3;color:var(--app-mar);font-variant-numeric:tabular-nums}
 .k em{display:block;font-style:normal;font-weight:700;font-size:15px;color:var(--app-fg)}
@@ -63,7 +68,7 @@ button.reset{font:inherit;border:1px solid var(--border);background:transparent;
 @media (max-width:860px){.maprow{grid-template-columns:1fr}#map{height:380px}}
 #map{width:100%;height:560px;display:block;background:var(--surface-0);border-radius:8px;touch-action:none;cursor:grab}
 #map path.z{stroke:var(--surface-1);stroke-width:.6;vector-effect:non-scaling-stroke}
-#map path.z:hover,#map path.z.sel{stroke:var(--hover);stroke-width:1.6}
+#map path.z:hover{stroke:var(--hover);stroke-width:1.6}#map path.z.sel{stroke:var(--hover);stroke-width:2.8}
 #map path.pv{fill:none;stroke:var(--text-primary);stroke-width:.8;stroke-opacity:.6;vector-effect:non-scaling-stroke;pointer-events:none;stroke-linejoin:round}
 .legend{display:flex;flex-wrap:wrap;gap:0;margin-top:8px;font-size:12px;color:var(--text-secondary);align-items:center}
 .legend .sw{display:inline-block;width:34px;height:10px;margin-right:2px;border-radius:2px}
@@ -112,7 +117,7 @@ th[aria-sort="ascending"]::after{content:" ↑"}
   </nav>
 </header>
 
-<section class="kpis" id="kpis"></section>
+<section class="panel" aria-label="Chiffres clés"><h2>Chiffres clés</h2><div class="kpis" id="kpis"></div><p class="ksc" id="ksc"></p></section>
 
 <section class="view" id="v-carte">
   <div class="card">
@@ -221,15 +226,33 @@ const wk = DATA.weeklyCases, wd = DATA.weeklyDeaths;
 const c7 = zones.reduce((a, z) => a + z.c7, 0);
 const active = zones.filter(z => z.c21 > 0).length;
 const nZS = DATA.map.length;
-const kpis = [   // [valeur, ligne en gras, libellé, couleur]
-  [fmt(last[1]), 'cumul au ' + dShort(DATA.updated), 'Cas confirmés', 'var(--app-mar)'],
-  [fmt(last[2]), pct(last[2] / last[1]) + ' de létalité', 'Décès confirmés', 'var(--c-red)'],
-  [fmt(last[3]), pct(last[3] / last[1]) + ' des cas confirmés', 'Guérisons', 'var(--c-gr)'],
-  [fmt(c7), 'jusqu\'au ' + dShort(DATA.updated), 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
-  [fmt(zones.length) + '/' + fmt(nZS), pct(zones.length / nZS), 'Zones de santé touchées', 'var(--app-mar)'],
-  [fmt(active), pct(active / Math.max(1, zones.length)) + ' des zones touchées', 'Zones avec des cas sur 21 jours', 'var(--c-or)'],
-];
-$('#kpis').innerHTML = kpis.map(k => `<div class="k" style="border-top-color:${k[3]}"><b style="color:${k[3]}">${k[0]}</b><em>${k[1]}</em><span>${k[2]}</span></div>`).join('');
+let SEL = null;                                   // zone de santé sélectionnée (nom), ou null
+function drawKpis() {
+  const p = $('#prov').value, z = SEL ? byName[SEL] : null, nat = !p && !SEL;
+  const zs = SEL ? (z ? [z] : []) : p ? zones.filter(x => x.p === p) : zones;
+  const sum = k => zs.reduce((a, x) => a + (x[k] || 0), 0);
+  const c = nat ? last[1] : sum('c'), d = nat ? last[2] : sum('d'), r = nat ? last[3] : null, n7 = sum('c7'), n21 = sum('c21');
+  const tot = SEL ? 1 : p ? DATA.map.filter(f => f.p === p).length : nZS, tz = zs.filter(x => x.c > 0).length, act = zs.filter(x => x.c21 > 0).length;
+  const day = 'jusqu\'au ' + dShort(DATA.updated);
+  const K = SEL ? [   // [valeur, ligne en gras, libellé, couleur]
+    [fmt(c), 'cumul au ' + dShort(DATA.updated), 'Cas confirmés', 'var(--app-mar)'],
+    [fmt(d), c ? pct(d / c) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
+    [fmt(n7), day, 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
+    [fmt(n21), c ? pct(n21 / c) + ' des cas' : '—', 'Cas, 21 derniers jours', 'var(--c-or)'],
+    [z && z.inc != null ? Math.round(z.inc).toLocaleString('fr-FR') : '—', z && z.pop ? fmt(z.pop) + ' habitants' : 'population inconnue', 'Cas pour 100 000 habitants', 'var(--app-mar)'],
+    [z ? dShort(z.first) : '—', z ? 'mise à jour : ' + dShort(z.upd) : 'aucun cas confirmé', 'Premier cas confirmé', 'var(--c-gr)'],
+  ] : [
+    [fmt(c), 'cumul au ' + dShort(DATA.updated), 'Cas confirmés', 'var(--app-mar)'],
+    [fmt(d), c ? pct(d / c) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
+    [r == null ? '—' : fmt(r), r == null ? 'donnée nationale uniquement' : pct(r / c) + ' des cas confirmés', 'Guérisons', 'var(--c-gr)'],
+    [fmt(n7), day, 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
+    [fmt(tz) + '/' + fmt(tot), pct(tz / Math.max(1, tot)), 'Zones de santé touchées', 'var(--app-mar)'],
+    [fmt(act), tz ? pct(act / tz) + ' des zones touchées' : '—', 'Zones avec des cas sur 21 jours', 'var(--c-or)'],
+  ];
+  $('#kpis').innerHTML = K.map(k => `<div class="k" style="border-top-color:${k[3]}"><b style="color:${k[3]}">${k[0]}</b><em>${k[1]}</em><span>${k[2]}</span></div>`).join('');
+  $('#ksc').textContent = 'Périmètre : ' + (SEL ? 'zone de santé de ' + SEL + (z ? ' (' + z.p + ')' : '') : p ? 'province de ' + p : 'République démocratique du Congo') + (SEL || p ? ' · cliquez de nouveau sur la zone ou sur « Vue d\'ensemble » pour revenir' : ' · cliquez sur une zone de santé de la carte pour la sélectionner');
+  window.EPI_K = K;
+}
 
 /* ---------- views (hash routing) ---------- */
 function route() {
@@ -259,7 +282,7 @@ const gMap = el('g', {}, svg);
 const shapes = DATA.map.map(f => {
   const [d, b] = toPath(f.t, f.g);
   bb = [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[2]), Math.max(bb[3], b[3])];
-  const p = el('path', {d, class: 'z'}, gMap);
+  const p = el('path', {d, class: 'z'}, gMap); p.__n = f.n;
   return {...f, el: p, b};
 });
 const gProv = el('g', {}, svg);
@@ -275,6 +298,7 @@ const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], c21: [1, 5, 10, 25, 50, 100, 
 const LABEL = {c: 'cas cumulés', c21: 'cas sur 21 jours', d: 'décès cumulés'};
 const colorFor = v => { if (!v) return 'var(--empty)'; const b = BINS[metric]; let i = 0; while (i < b.length - 1 && v >= b[i + 1]) i++; return `var(--s${i + 1})`; };
 function paintMap() {
+  gMap.parentNode.appendChild(gProv);
   shapes.forEach(s => { const z = byName[s.n]; s.el.style.fill = colorFor(z ? z[metric] : 0); });
   const b = BINS[metric];
   $('#legend').innerHTML = `<span style="margin-right:8px">${LABEL[metric]}</span>` +
@@ -300,7 +324,7 @@ function fitProv() {
   const sel = p ? shapes.filter(s => s.p === p) : shapes;
   const b = sel.reduce((a, s) => [Math.min(a[0], s.b[0]), Math.min(a[1], s.b[1]), Math.max(a[2], s.b[2]), Math.max(a[3], s.b[3])], [1e9, 1e9, -1e9, -1e9]);
   setVB(b);
-  shapes.forEach(s => s.el.style.opacity = !p || s.p === p ? 1 : .45);
+  shapes.forEach(s => s.el.style.fillOpacity = !p || s.p === p ? 1 : .35);
   paintMap();
 }
 shapes.forEach(s => {
@@ -308,25 +332,30 @@ shapes.forEach(s => {
     const z = byName[s.n];
     showTip(ev, s.n + ' <span style="color:var(--text-muted);font-weight:400">· ' + s.p + '</span>', z ? [
       ['Cas cumulés', fmt(z.c)], ['Cas, 21 derniers jours', fmt(z.c21)], ['Décès cumulés', fmt(z.d)], ['Létalité', pct(z.cfr)], ['Premier cas', dShort(z.first)]
-    ] : [['Cas confirmés', '0']]);
+    ].concat([['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]) : [['Cas confirmés', '0'], ['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]);
   });
   s.el.addEventListener('pointerleave', hideTip);
 });
 $('#metric').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
   metric = b.dataset.m; $('#metric').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); paintMap(); });
-$('#prov').addEventListener('change', fitProv);
-$('#reset').addEventListener('click', () => { $('#prov').value = ''; fitProv(); });
-$('#rank').addEventListener('click', e => { const li = e.target.closest('li[data-z]'); if (!li) return;
-  const s = shapes.find(s => s.n === li.dataset.z); if (!s) return;
-  shapes.forEach(x => x.el.classList.toggle('sel', x === s));
-  const w = s.b[2] - s.b[0], h = s.b[3] - s.b[1], m = Math.max(w, h) * 2.5;
-  setVB([s.b[0] - m, s.b[1] - m, s.b[2] + m, s.b[3] + m], 0); });
+function zoomTo(s) { const w = s.b[2] - s.b[0], h = s.b[3] - s.b[1], m = Math.max(w, h) * 2.5; setVB([s.b[0] - m, s.b[1] - m, s.b[2] + m, s.b[3] + m], 0); }
+function selectZone(n) {
+  if (SEL === n) { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); fitProv(); drawKpis(); return; }
+  const s = shapes.find(x => x.n === n); if (!s) return;
+  SEL = n; $('#prov').value = s.p; fitProv();
+  shapes.forEach(x => x.el.classList.toggle('sel', x === s)); gMap.appendChild(s.el); zoomTo(s); drawKpis();
+}
+$('#prov').addEventListener('change', () => { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); fitProv(); drawKpis(); });
+$('#reset').addEventListener('click', () => { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); $('#prov').value = ''; fitProv(); drawKpis(); });
+$('#rank').addEventListener('click', e => { const li = e.target.closest('li[data-z]'); if (li) selectZone(li.dataset.z); });
 /* zoom & pan */
 const toSvg = (cx, cy) => { const r = svg.getBoundingClientRect(); return [vb[0] + (cx - r.left) / r.width * vb[2], vb[1] + (cy - r.top) / r.height * vb[3]]; };
 svg.addEventListener('wheel', e => { e.preventDefault(); const f = Math.exp(e.deltaY * .0015), [x, y] = toSvg(e.clientX, e.clientY);
   vb = [x - (x - vb[0]) * f, y - (y - vb[1]) * f, vb[2] * f, vb[3] * f]; svg.setAttribute('viewBox', vb.join(' ')); }, {passive: false});
-const ptrs = new Map(); let pinch = null;
-svg.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, [e.clientX, e.clientY]); svg.setPointerCapture(e.pointerId); svg.style.cursor = 'grabbing'; });
+const ptrs = new Map(); let pinch = null, downT = null, moved = 0;
+svg.addEventListener('pointerdown', e => { downT = e.target; moved = 0; });
+svg.addEventListener('pointermove', e => { if (ptrs.has(e.pointerId)) moved += Math.abs(e.movementX) + Math.abs(e.movementY); });
+svg.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, [e.clientX, e.clientY]); try { svg.setPointerCapture(e.pointerId); } catch (_) {} svg.style.cursor = 'grabbing'; });
 svg.addEventListener('pointermove', e => {
   if (!ptrs.has(e.pointerId)) return;
   const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
@@ -336,7 +365,8 @@ svg.addEventListener('pointermove', e => {
     if (pinch) { const f = pinch / d, [x, y] = toSvg((a[0] + b[0]) / 2, (a[1] + b[1]) / 2); vb = [x - (x - vb[0]) * f, y - (y - vb[1]) * f, vb[2] * f, vb[3] * f]; } pinch = d; }
   svg.setAttribute('viewBox', vb.join(' '));
 });
-const up = e => { ptrs.delete(e.pointerId); pinch = null; svg.style.cursor = 'grab'; };
+const up = e => { ptrs.delete(e.pointerId); pinch = null; svg.style.cursor = 'grab';
+  if (e.type === 'pointerup' && moved < 6 && downT && downT.classList && downT.classList.contains('z') && downT.__n) selectZone(downT.__n); downT = null; };
 svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
 
 /* ---------- charts ---------- */
@@ -415,7 +445,9 @@ $('#q').addEventListener('input', drawTable); $('#prov2').addEventListener('chan
 /* ---------- start ---------- */
 route();
 drawTable();
+drawKpis();
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { fitProv(); if (location.hash === '#courbes') drawCharts(); }, 150); });
+window.EPI = {DATA, zones, byName, BINS, LABEL, st: () => ({p: $('#prov').value, sel: SEL}), K: () => window.EPI_K};
 sendH();
 })();
 </script>
