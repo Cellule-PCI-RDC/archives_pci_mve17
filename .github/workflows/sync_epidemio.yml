@@ -3,10 +3,11 @@ on:
   schedule: [{cron: "17 */6 * * *"}]   # toutes les 6 heures
   workflow_dispatch:
 permissions: {contents: write}
-concurrency: {group: synchro-donnees, cancel-in-progress: false}
+concurrency: {group: synchro-epi, cancel-in-progress: false}   # file d'attente propre à ce workflow
 jobs:
   epi:
     runs-on: ubuntu-latest
+    timeout-minutes: 15   # un run bloqué ne retient jamais les suivants
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,5 +34,8 @@ jobs:
           git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
           git add epi.json
           git commit -m "Actualité épidémiologique (INSP/INRB)" || exit 0
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push
+          for i in 1 2 3 4 5; do   # un autre workflow a pu publier entre-temps : on récupère puis on réessaie
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q && exit 0
+            sleep $((i*7))
+          done
+          echo "Publication impossible après 5 essais"; exit 1
