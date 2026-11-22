@@ -363,7 +363,7 @@ svg.mp path.zc{cursor:pointer}svg.mp path.zc:hover{stroke:#1b2a4a;stroke-width:1
 <section class="panel"><h3>Accéder aux formulaires Kobo qui alimentent l’application</h3>
 <a class="lk k1" href="https://ee.kobotoolbox.org/x/wPbArYUo" target="_blank" rel="noopener noreferrer"><b>Soumettre votre Sitrep ↗</b><span>https://ee.kobotoolbox.org/x/wPbArYUo</span></a>
 <a class="lk k2" href="https://ee.kobotoolbox.org/x/kym6EbqI" target="_blank" rel="noopener noreferrer"><b>Effectuer une Évaluation PCI ↗</b><span>https://ee.kobotoolbox.org/x/kym6EbqI</span></a>
-<a class="lk k3 off" id="lkdocs" href="#" target="_blank" rel="noopener noreferrer"><b>Déposer un document (compte rendu, rapport, plan…) ↗</b><span>Lien disponible dès la mise en service du formulaire de dépôt.</span></a>
+<a class="lk k3" id="lkdocs" href="https://ee.kobotoolbox.org/x/eKOJ0CbO" target="_blank" rel="noopener noreferrer"><b>Déposer un document (compte rendu, rapport, plan…) ↗</b><span>https://ee.kobotoolbox.org/x/eKOJ0CbO</span></a>
 <p><b>Chemin d’accès</b></p><ol><li>Ouvrez le formulaire voulu ci-dessus et renseignez-le complètement, puis envoyez-le.</li><li>Revenez dans l’application, onglet <b>Sitreps</b> ou <b>Évaluations</b>, ou pour un document déposé, page <b>En savoir plus › Vue d’ensemble</b> (code d’accès requis).</li><li>Après la synchronisation automatique (Sitreps : environ 5 minutes ; documents : environ une heure ; Évaluations : quelques heures), filtrez par date, période ou province puis téléchargez votre rapport.</li></ol></section>
 <section class="panel"><h3>Qualité et sécurité des données</h3>
 <ul><li><b>Origine unique :</b> seules les soumissions faites par les trois formulaires ci-dessus alimentent l’application.</li>
@@ -1164,7 +1164,7 @@ function tab(t){TAB=t;document.querySelectorAll('#v-more .mtabs button').forEach
 document.querySelectorAll('#v-more .mtabs button').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.mt)));
 document.addEventListener('pci-unlock',()=>{if(!IDX)load()});
 /* lien public du formulaire de dépôt (écrit par le workflow) */
-fetch('docs_form.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{const a=$('lkdocs');if(!a)return;
+fetch('docs_form.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{const a=$('lkdocs');if(!a||a.getAttribute('href')!=='#')return;/* lien saisi dans la page : prioritaire */
  if(j&&/^https:\/\//.test(j.url)){a.href=j.url;a.querySelector('span').textContent=j.url;a.classList.remove('off')}}).catch(()=>{});
 /* fichiers chiffrés */
 const ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
