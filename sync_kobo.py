@@ -1,20 +1,29 @@
 """Synchronise Kobo -> summary.json (public) + data.enc.json (chiffré avec le code d'accès)."""
-import os, json, base64, re, unicodedata, datetime, hashlib, urllib.request
+import os, json, base64, re, unicodedata, datetime, hashlib, urllib.request, gzip
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 IT = 300000
+
+def kdf_salt():
+    """Sel commun à tous les fichiers chiffrés (kdf.json, public) : le navigateur ne calcule la clé qu'une
+    fois par session. Le sel n'est pas un secret ; seul le code d'accès l'est."""
+    try:
+        return base64.b64decode(json.load(open("kdf.json"))["salt"])
+    except Exception:
+        return os.urandom(16)
 def slug(t):
     # identique à la fonction sl() de index.html (accents retirés, tout le reste devient « _ »)
     t = "".join(c for c in unicodedata.normalize("NFD", str(t)) if unicodedata.category(c) != "Mn").lower()
     return re.sub(r"[^a-z0-9]+", "_", t).strip("_")
 
 def encrypt(data: bytes, code: str) -> dict:
-    salt, iv = os.urandom(16), os.urandom(12)
+    salt, iv = kdf_salt(), os.urandom(12)
     key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=IT).derive(code.encode())
     b = lambda x: base64.b64encode(x).decode()
-    return {"it": IT, "salt": b(salt), "iv": b(iv), "ct": b(AESGCM(key).encrypt(iv, data, None))}
+    # compressé avant chiffrement (« z »: "gz") : fichier 5 à 8 fois plus léger à télécharger
+    return {"it": IT, "salt": b(salt), "iv": b(iv), "z": "gz", "ct": b(AESGCM(key).encrypt(iv, gzip.compress(data, 9), None))}
 
 def summarize(rows):
     p = {}
@@ -126,9 +135,10 @@ def fetch_ess():
     return build_ess(ess_records(asset, rows))
 
 def opens_with(path, code):
-    """Vrai si le fichier chiffré existant s'ouvre avec ce code."""
+    """Vrai si le fichier chiffré existant s'ouvre avec ce code et est déjà au format actuel (compressé, sel commun)."""
     try:
         e = json.load(open(path)); b = base64.b64decode
+        if e.get("z") != "gz" or (os.path.exists("kdf.json") and b(e["salt"]) != kdf_salt()): return False
         key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b(e["salt"]), iterations=e["it"]).derive(code.encode())
         AESGCM(key).decrypt(b(e["iv"]), b(e["ct"]), None)
         return True
