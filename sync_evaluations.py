@@ -163,9 +163,19 @@ def _kdf(code, salt):
 def encrypt(data: bytes, code: str) -> dict:
     import base64
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    salt, iv = os.urandom(16), os.urandom(12)
+    import gzip
+    salt, iv = kdf_salt(), os.urandom(12)
     b = lambda x: base64.b64encode(x).decode()
-    return {"it": IT, "salt": b(salt), "iv": b(iv), "ct": b(AESGCM(_kdf(code, salt)).encrypt(iv, data, None))}
+    # compressé avant chiffrement (« z »: "gz") : fichier 5 à 8 fois plus léger à télécharger
+    return {"it": IT, "salt": b(salt), "iv": b(iv), "z": "gz", "ct": b(AESGCM(_kdf(code, salt)).encrypt(iv, gzip.compress(data, 9), None))}
+
+def kdf_salt():
+    """Sel commun à tous les fichiers chiffrés (kdf.json, public) : le navigateur ne calcule la clé qu'une fois."""
+    import base64
+    try:
+        return base64.b64decode(json.load(open("kdf.json"))["salt"])
+    except Exception:
+        return os.urandom(16)
 
 def strip_upd(txt):
     """Contenu sans la date de génération, pour ne republier que si les données ont changé."""
@@ -178,8 +188,11 @@ def decrypt_existing(path, code):
     import base64
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     try:
+        import gzip
         e = json.load(open(path)); b = base64.b64decode
-        return strip_upd(AESGCM(_kdf(code, b(e["salt"]))).decrypt(b(e["iv"]), b(e["ct"]), None).decode("utf8"))
+        if e.get("z") != "gz" or (os.path.exists("kdf.json") and b(e["salt"]) != kdf_salt()):
+            return None                       # ancien format : on republie au format compressé
+        return strip_upd(gzip.decompress(AESGCM(_kdf(code, b(e["salt"]))).decrypt(b(e["iv"]), b(e["ct"]), None)).decode("utf8"))
     except Exception:
         return None
 
