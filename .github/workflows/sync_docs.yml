@@ -3,10 +3,11 @@ on:
   schedule: [{cron: "41 * * * *"}]   # toutes les heures
   workflow_dispatch:
 permissions: {contents: write}
-concurrency: {group: synchro-donnees, cancel-in-progress: false}
+concurrency: {group: synchro-docs, cancel-in-progress: false}   # file d'attente propre à ce workflow
 jobs:
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 30   # un run bloqué ne retient jamais les suivants
     env:
       KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
       ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
@@ -36,5 +37,8 @@ jobs:
             if [ -e "$p" ] || git ls-files --error-unmatch "$p" >/dev/null 2>&1; then git add -A -- "$p"; fi
           done
           git commit -m "Synchronisation des documents" || exit 0
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push
+          for i in 1 2 3 4 5; do   # un autre workflow a pu publier entre-temps : on récupère puis on réessaie
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q && exit 0
+            sleep $((i*7))
+          done
+          echo "Publication impossible après 5 essais"; exit 1
