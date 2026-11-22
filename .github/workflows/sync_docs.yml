@@ -1,0 +1,40 @@
+name: Synchroniser les documents (formulaire Kobo de dépôt)
+on:
+  schedule: [{cron: "41 * * * *"}]   # toutes les heures
+  workflow_dispatch:
+permissions: {contents: write}
+concurrency: {group: synchro-donnees, cancel-in-progress: false}
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    env:
+      KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+      ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+      ACCES_CODE: ${{ secrets.ACCES_CODE }}
+      KOBO_SERVER: ${{ vars.KOBO_SERVER }}
+      KOBO_UID_DOCS: ${{ vars.KOBO_UID_DOCS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install requests cryptography
+      - name: Télécharger et chiffrer les nouveaux documents
+        id: f
+        run: python sync_docs.py fetch
+      - name: Installer LibreOffice (aperçus PDF des fichiers Word, PowerPoint, Excel)
+        if: steps.f.outputs.need_lo == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libreoffice-writer libreoffice-impress libreoffice-calc fonts-dejavu fonts-liberation >/dev/null
+      - name: Produire les aperçus et l'index chiffré
+        if: steps.f.outputs.skip != 'true'
+        run: python sync_docs.py finish
+      - name: Publier
+        if: steps.f.outputs.skip != 'true'
+        run: |
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          rm -rf _tmp_docs   # fichiers en clair : jamais publiés
+          for p in docs docs.enc.json docs_form.json; do
+            if [ -e "$p" ] || git ls-files --error-unmatch "$p" >/dev/null 2>&1; then git add -A -- "$p"; fi
+          done
+          git commit -m "Synchronisation des documents" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
