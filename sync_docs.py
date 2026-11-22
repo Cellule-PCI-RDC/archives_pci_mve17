@@ -16,7 +16,7 @@ Variables : KOBO_TOKEN (secret), ACCESS_CODE (secret), KOBO_UID_DOCS (variable :
 KOBO_SERVER (facultatif, https://kf.kobotoolbox.org par défaut).
 Dépendances : pip install requests cryptography ; LibreOffice pour les aperçus.
 """
-import base64, hashlib, json, os, re, shutil, subprocess, sys, time
+import base64, gzip, hashlib, json, os, re, shutil, subprocess, sys, time
 
 IT = 300000
 TMP = "_tmp_docs"
@@ -38,18 +38,36 @@ def kdf(code, salt):
     return PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=IT).derive(code.encode())
 
 
+def kdf_salt():
+    """Sel commun à tous les fichiers chiffrés (kdf.json, public) : le navigateur ne calcule la clé qu'une fois."""
+    try:
+        return ub64(json.load(open("kdf.json"))["salt"])
+    except Exception:
+        return os.urandom(16)
+
+
 def enc_index(obj, code):
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-    salt, iv = os.urandom(16), os.urandom(12)
-    ct = AESGCM(kdf(code, salt)).encrypt(iv, json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(), None)
-    return {"it": IT, "salt": b64(salt), "iv": b64(iv), "ct": b64(ct)}
+    salt, iv = kdf_salt(), os.urandom(12)
+    raw = gzip.compress(json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(), 9)
+    return {"it": IT, "salt": b64(salt), "iv": b64(iv), "z": "gz", "ct": b64(AESGCM(kdf(code, salt)).encrypt(iv, raw, None))}
+
+
+def index_is_current(path):
+    """Vrai si l'index existant est déjà au format actuel (compressé, sel commun)."""
+    try:
+        e = json.load(open(path))
+        return e.get("z") == "gz" and (not os.path.exists("kdf.json") or ub64(e["salt"]) == kdf_salt())
+    except Exception:
+        return False
 
 
 def dec_index(path, code):
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     try:
         e = json.load(open(path))
-        return json.loads(AESGCM(kdf(code, ub64(e["salt"]))).decrypt(ub64(e["iv"]), ub64(e["ct"]), None))
+        raw = AESGCM(kdf(code, ub64(e["salt"]))).decrypt(ub64(e["iv"]), ub64(e["ct"]), None)
+        return json.loads(gzip.decompress(raw) if e.get("z") == "gz" else raw)
     except Exception:
         return None
 
@@ -187,7 +205,7 @@ def finish():
     docs.sort(key=lambda d: d.get("up") or "", reverse=True)
     idx = {"upd": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "key": st["key"], "docs": docs}
     old = dec_index("docs.enc.json", c) if os.path.exists("docs.enc.json") else None
-    if old and {k: v for k, v in old.items() if k != "upd"} == {k: v for k, v in idx.items() if k != "upd"}:
+    if old and index_is_current("docs.enc.json") and {k: v for k, v in old.items() if k != "upd"} == {k: v for k, v in idx.items() if k != "upd"}:
         print("Aucun changement dans la liste des documents.")
     else:
         json.dump(enc_index(idx, c), open("docs.enc.json", "w")); print("docs.enc.json :", len(docs), "document(s)")
