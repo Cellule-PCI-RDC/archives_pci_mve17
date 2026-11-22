@@ -560,9 +560,16 @@ const F=['E8F1F2','1C7293','C8382B'];let o='';if(M.zs.length)M.zs.forEach(z=>{o+
 const sq=(x,y,c)=>`<p:sp><p:nvSpPr><p:cNvPr id="${id++}" name="Légende"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="150000" cy="150000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${c}"/></a:solidFill><a:ln w="6350"><a:solidFill><a:srgbClr val="9DB8BF"/></a:solidFill></a:ln></p:spPr></p:sp>`;
 const tx=(x,y,w,t)=>`<p:sp><p:nvSpPr><p:cNvPr id="${id++}" name="Légende texte"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="150000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:r><a:rPr lang="fr-FR" sz="1000"><a:solidFill><a:srgbClr val="1B2B33"/></a:solidFill></a:rPr><a:t>${t}</a:t></a:r></a:p></p:txBody></p:sp>`;
 const ly=BY+BH-pad-60000,lx=BX+pad,iw=1650000;[['C8382B',(S.fr?'Zone rapportée sur la période':'Zone rapportée ce jour')],['1C7293','Zone couverte'],['E8F1F2','Zone non couverte']].forEach(([c,t],i)=>{o+=sq(lx+i*iw,ly,c)+tx(lx+i*iw+210000,ly,iw-250000,t)});o+=`<p:sp><p:nvSpPr><p:cNvPr id="${id++}" name="Titre carte"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${BX}" y="${BY+45000}"/><a:ext cx="${BW}" cy="${Math.round(ts*1.25*12700)+20000}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="fr-FR" sz="${ts*100}" b="1" u="sng"><a:solidFill><a:srgbClr val="0B3C49"/></a:solidFill><a:latin typeface="Cambria"/></a:rPr><a:t>${esc(T)}</a:t></a:r></a:p></p:txBody></p:sp>`;return o}
-const dec=async(e,c)=>{const b=t=>Uint8Array.from(atob(t),x=>x.charCodeAt(0)),k=await crypto.subtle.importKey('raw',new TextEncoder().encode(c),'PBKDF2',false,['deriveKey']),key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b(e.salt),iterations:e.it,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['decrypt']);return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b(e.iv)},key,b(e.ct))))};
-async function unlock(code){if(!code)throw Error('Saisissez le code d’accès.');S.nodata=false;let r=null;try{r=await fetch('data.enc.json?t='+Date.now(),{cache:'no-store'})}catch(e){}if(!r||!r.ok)throw Error('Données momentanément indisponibles : vérifiez votre connexion puis réessayez.');let raw;try{raw=await dec(await r.json(),code)}catch(e){throw Error('Code incorrect.')}
-S.syn=dd(norm(raw));S.ok=true;S.code=code;if(S.mode==='sync')S.rows=S.syn;document.dispatchEvent(new Event('pci-unlock'))}
+const DKC=new Map();/* clés déjà calculées : le calcul (volontairement lent) n'est fait qu'une fois par session */
+const unz=async u=>{if(window.DecompressionStream)return new Uint8Array(await new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+ if(!window.pako)await new Promise((ok,ko)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js';s.onload=ok;s.onerror=()=>ko(Error('décompression indisponible'));document.head.appendChild(s)});return pako.ungzip(u)};
+const dec=async(e,c)=>{const b=t=>Uint8Array.from(atob(t),x=>x.charCodeAt(0)),id=c+'|'+e.salt+'|'+e.it;let key=DKC.get(id);
+ if(!key){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(c),'PBKDF2',false,['deriveKey']);key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b(e.salt),iterations:e.it,hash:'SHA-256'},k,{name:'AES-GCM',length:256},false,['decrypt']);DKC.set(id,key)}
+ let u=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b(e.iv)},key,b(e.ct)));if(e.z==='gz')u=await unz(u);return JSON.parse(new TextDecoder().decode(u))};
+let LASTD='';
+async function unlock(code,quiet){if(!code)throw Error('Saisissez le code d’accès.');S.nodata=false;let r=null,txt='';try{r=await fetch('data.enc.json',{cache:'no-cache'});if(r.ok)txt=await r.text()}catch(e){}if(!r||!r.ok||!txt)throw Error('Données momentanément indisponibles : vérifiez votre connexion puis réessayez.');
+ if(quiet&&S.ok&&code===S.code&&txt===LASTD)return false;/* rien de nouveau */
+ let raw;try{raw=await dec(JSON.parse(txt),code)}catch(e){throw Error('Code incorrect.')} LASTD=txt;const first=!S.ok||S.code!==code;S.syn=dd(norm(raw));S.ok=true;S.code=code;if(S.mode==='sync')S.rows=S.syn;if(first)document.dispatchEvent(new Event('pci-unlock'));return true}
 window.PCI_DEC=dec;window.PCI_CODE=()=>S.ok?S.code:'';
 function setMode(m){S.mode=m;S.rows=m==='local'?S.loc:S.syn;S.prov=null;S.date='';S.fr='';S.pt='day';S.pl='';render()}
 const sumDates=()=>S.sum?[...new Set(Object.values(S.sum.p).flatMap(o=>Object.keys(o)))].sort().reverse():[];
@@ -605,7 +612,10 @@ async function go(){msg('Vérification…',1);try{await unlock($('#code').value.
 function render(){const ds=live()?[...new Set(S.rows.map(r=>r.d))].sort().reverse():sumDates();if(!S.fr&&!ds.includes(S.date))S.date=ds[0]||'';
 $('#st').textContent='Bienvenue dans la page des rapports de situation des interventions PCI au cours de la 17ème épidémie de MVE en RDC. '+(S.mode==='local'?'Mode : mes données locales (visibles sur cet appareil uniquement).':'Données synchronisées automatiquement depuis Kobo'+(S.sum&&S.sum.upd?' · dernière mise à jour : '+S.sum.upd.replace('T',' ').slice(0,16)+' UTC':'')+(S.ok?' · accès déverrouillé':'')+(S.sum?(S.ess?' · base ESS : '+Object.values(S.ess).reduce((n,v)=>n+v.length,0)+' établissements évalués':' · base ESS non synchronisée'):''));
 home();if(window.SF){SF.sync();SF.auto()}}
-async function refresh(){try{const r=await fetch('summary.json?t='+Date.now(),{cache:'no-store'});if(r.ok){S.sum=await r.json();S.ess=S.sum.ess||null;S.esz=S.sum.esz||null}}catch(e){}if(S.ok&&S.code)try{await unlock(S.code);if(S.mode==='sync')S.rows=S.syn}catch(e){}render()}
+let LASTS='',LASTR=0;
+async function refresh(){if(Date.now()-LASTR<60000)return;LASTR=Date.now();/* au plus une fois par minute (retours répétés sur l'application) */
+ let ch=!LASTS;try{const r=await fetch('summary.json',{cache:'no-cache'});if(r.ok){const t=await r.text();if(t!==LASTS){LASTS=t;S.sum=JSON.parse(t);S.ess=S.sum.ess||null;S.esz=S.sum.esz||null;ch=true}}}catch(e){}
+ if(S.ok&&S.code)try{if(await unlock(S.code,1)){if(S.mode==='sync')S.rows=S.syn;ch=true}}catch(e){}if(ch)render()}
 
 $('#loc').onclick=()=>$('#pn').classList.toggle('hide');
 $('#back').onclick=()=>setMode('sync');
@@ -1010,7 +1020,8 @@ function apply(res,src){LC=pack(res);LC.D.src=src;MODE='local';AUTO=false;try{lo
 async function loadFile(f){msg('Lecture de '+f.name+'…',1);
  try{if(!window.XLSX)throw Error('bibliothèque de lecture Excel non chargée');const csv=/\.csv$/i.test(f.name),wb=XLSX.read(csv?await f.text():await f.arrayBuffer(),{type:csv?'string':'array'}),a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,dateNF:'yyyy-mm-dd hh:mm:ss',defval:''});
   apply(parse(a),f.name)}catch(x){msg('Erreur de lecture : '+(x.message||x))}}
-async function sync(){try{const c=window.PCI_CODE&&PCI_CODE();if(!c)throw 0;const r=await fetch('evaluations.enc.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const j=await PCI_DEC(await r.json(),c);if(!SY||j.upd!==UPD){SY=pack(mapSync(j));UPD=j.upd||'';if(AUTO){MODE='sync';AUTO=false}render();try{window.SF&&window.SF.auto()}catch(e){}}}}catch(e){}if(!SY&&LC&&MODE==='sync'){MODE='local';AUTO=true;render()}}
+let LASTE='',LSY=0;
+async function sync(){try{const c=window.PCI_CODE&&PCI_CODE();if(!c)throw 0;if(SY&&Date.now()-LSY<60000)return;LSY=Date.now();const r=await fetch('evaluations.enc.json',{cache:'no-cache'});if(r.ok){const t=await r.text();if(SY&&t===LASTE)return;const j=await PCI_DEC(JSON.parse(t),c);LASTE=t;if(!SY||j.upd!==UPD){SY=pack(mapSync(j));UPD=j.upd||'';if(AUTO){MODE='sync';AUTO=false}render();try{window.SF&&window.SF.auto()}catch(e){}}}}catch(e){}if(!SY&&LC&&MODE==='sync'){MODE='local';AUTO=true;render()}}
 function saveBlob(blob,name){const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);a.remove()},1500)}
 window.EVX={nc,ct,rr,hb,wrapT,mkPdf,mkPptx,NV,MR,FN,CO,TL,EMB,saveBlob};
 
@@ -1135,7 +1146,7 @@ let IDX=null,ERR='',SEL=null,TAB='docs',Q='',TY='',KEY=null,busy=0;
 const code=()=>window.PCI_CODE?PCI_CODE():'';
 const ping=()=>document.dispatchEvent(new Event('evr'));            /* rafraîchit le bouton imprimante */
 async function load(){if(!code()){IDX=null;render();return}ERR='';
- try{const r=await fetch('docs.enc.json?t='+Date.now(),{cache:'no-store'});
+ try{const r=await fetch('docs.enc.json',{cache:'no-cache'});
   if(r.status===404){IDX={docs:[]}}else if(!r.ok)throw 0;else IDX=await PCI_DEC(await r.json(),code())}
  catch(e){IDX=null;ERR='Liste des documents momentanément indisponible. Réessayez plus tard.'}
  KEY=null;if(SEL&&!(IDX&&IDX.docs.some(d=>d.id===SEL)))SEL=null;render();ping()}
@@ -1164,12 +1175,12 @@ function tab(t){TAB=t;document.querySelectorAll('#v-more .mtabs button').forEach
 document.querySelectorAll('#v-more .mtabs button').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.mt)));
 document.addEventListener('pci-unlock',()=>{if(!IDX)load()});
 /* lien public du formulaire de dépôt (écrit par le workflow) */
-fetch('docs_form.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{const a=$('lkdocs');if(!a||a.getAttribute('href')!=='#')return;/* lien saisi dans la page : prioritaire */
+fetch('docs_form.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{const a=$('lkdocs');if(!a||a.getAttribute('href')!=='#')return;/* lien saisi dans la page : prioritaire */
  if(j&&/^https:\/\//.test(j.url)){a.href=j.url;a.querySelector('span').textContent=j.url;a.classList.remove('off')}}).catch(()=>{});
 /* fichiers chiffrés */
 const ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 async function bytes(path){if(!KEY)KEY=await crypto.subtle.importKey('raw',ub(IDX.key),'AES-GCM',false,['decrypt']);
- const r=await fetch(path+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('Fichier introuvable');const b=new Uint8Array(await r.arrayBuffer());
+ const r=await fetch(path,{cache:'force-cache'});if(!r.ok)throw Error('Fichier introuvable');const b=new Uint8Array(await r.arrayBuffer());
  return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},KEY,b.slice(12)))}
 const cur=()=>IDX&&IDX.docs.find(d=>d.id===SEL);
 const MIME={pdf:'application/pdf',doc:'application/msword',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',ppt:'application/vnd.ms-powerpoint',pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',xls:'application/vnd.ms-excel',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',txt:'text/plain',csv:'text/csv'};
@@ -1240,6 +1251,7 @@ const hd=document.querySelector('.hd');let hq=0;
 function hh(){hq=0;const p=hd.style.getPropertyValue('--p');hd.style.setProperty('--p','0');const h=hd.offsetHeight;hd.style.setProperty('--p',p||'0');document.querySelector('.hs').style.height=(h+6)+'px'}
 const hs=()=>{if(!hq)hq=requestAnimationFrame(hh)};addEventListener('resize',hs);addEventListener('load',hs);document.addEventListener('DOMContentLoaded',hs);hh();setTimeout(hh,300);
 const _sh=show;
+(()=>{const pre=()=>{const f=el('epif');if(f&&!f.getAttribute('src'))f.src='epidemio.html'};addEventListener('load',()=>setTimeout(()=>('requestIdleCallback' in window?requestIdleCallback(pre,{timeout:8000}):pre()),6000))})();/* préchargement de l'Actualité */
 window.NAV={show,nav,ask:w=>{if(cur!=='home')show('home',1);ask(w)}};/* la fenêtre du code fait partie de l’accueil */addEventListener('message',e=>{const f=el('epif');if(f&&e.source===f.contentWindow&&e.data&&e.data.epiH)f.style.height=Math.max(600,Math.ceil(e.data.epiH))+'px'});
 })();</script>
 </body></html>
