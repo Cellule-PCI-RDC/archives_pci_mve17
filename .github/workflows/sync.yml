@@ -5,9 +5,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency: {group: synchro-sitreps, cancel-in-progress: false}   # file d'attente propre à ce workflow
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 10   # un run bloqué ne retient jamais les suivants
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,4 +28,10 @@ jobs:
           git config user.name "sync-bot"
           git config user.email "sync-bot@users.noreply.github.com"
           git add summary.json data.enc.json
-          git diff --cached --quiet || (git commit -m "Synchronisation Kobo" && git push)
+          git diff --cached --quiet && exit 0
+          git commit -m "Synchronisation Kobo"
+          for i in 1 2 3 4 5; do   # un autre workflow a pu publier entre-temps : on récupère puis on réessaie
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q && exit 0
+            sleep $((i*7))
+          done
+          echo "Publication impossible après 5 essais"; exit 1
