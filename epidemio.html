@@ -117,7 +117,7 @@ th[aria-sort="ascending"]::after{content:" ↑"}
   </nav>
 </header>
 
-<section class="panel" aria-label="Chiffres clés"><h2>Chiffres clés</h2><div class="kpis" id="kpis"></div><p class="ksc" id="ksc"></p></section>
+<section class="panel" aria-label="Chiffres clés"><h2>Chiffres clés</h2><div class="kpis" id="kpis"><p class="ksc">Chargement des données épidémiologiques…</p></div><p class="ksc" id="ksc"></p></section>
 
 <section class="view" id="v-carte">
   <div class="card">
@@ -192,8 +192,11 @@ const sendH = () => { try { parent.postMessage({epiH: document.querySelector('.w
 new ResizeObserver(sendH).observe(document.body); addEventListener('load', sendH);
 (async () => {
 let DATA;
-try { DATA = await (await fetch('epi.json?t=' + Date.now(), {cache: 'no-store'})).json(); }
-catch (e) { document.querySelector('.wrap').innerHTML = '<p style="padding:20px">Données épidémiologiques momentanément indisponibles. Réessayez plus tard.</p>'; sendH(); return; }
+for (let i = 0; i < 3 && !DATA; i++) {          // connexions lentes ou instables : jusqu'à 3 essais
+  try { const r = await fetch('epi.json', {cache: 'no-cache'}); if (r.ok) DATA = await r.json(); } catch (e) {}
+  if (!DATA && i < 2) await new Promise(r => setTimeout(r, i ? 5000 : 2000));
+}
+if (!DATA) { document.querySelector('.wrap').innerHTML = '<p style="padding:20px">Données épidémiologiques momentanément indisponibles (connexion lente ou interrompue).</p><p style="padding:0 20px"><button type="button" onclick="location.reload()" style="font:inherit;font-weight:700;padding:10px 18px;border-radius:999px;border:0;background:var(--app-navy);color:#fff;cursor:pointer">Réessayer</button></p>'; sendH(); return; }
 const $ = s => document.querySelector(s);
 const fmt = n => n == null ? '—' : n.toLocaleString('fr-FR');
 const pct = x => x == null || !isFinite(x) ? '—' : (x * 100).toLocaleString('fr-FR', {maximumFractionDigits: 1}) + ' %';
