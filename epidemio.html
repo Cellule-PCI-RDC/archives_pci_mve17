@@ -101,9 +101,14 @@ th[aria-sort="ascending"]::after{content:" ↑"}
 #tip .r span:last-child{color:var(--text-primary);font-variant-numeric:tabular-nums;font-weight:600}
 .note{color:var(--text-muted);font-size:12px;margin-top:18px;line-height:1.5}
 .view{display:none}.view.on{display:block}
-.wkbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;padding:10px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px}
-.wkbar label{font-weight:700;font-size:13.5px;color:var(--text-primary)}
-.wkbar[hidden]{display:none}.wkbar select{min-width:220px}.wkbar .ksc{margin:0}
+.fbar{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px 20px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px}
+.fgrp{display:flex;flex-direction:column;gap:6px}
+.fgrp .flabel{font-weight:700;font-size:12.5px;color:var(--text-primary)}
+.fgrp select{min-width:210px}
+.wkgrp{flex:1 1 340px;min-width:260px}.wkgrp[hidden]{display:none}
+.wkchecks{display:flex;flex-wrap:wrap;gap:3px 12px;max-height:120px;overflow:auto;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-0)}
+.wkchecks label{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:500;white-space:nowrap;cursor:pointer}
+.wkchecks .wkall{font-weight:700;color:var(--text-primary);width:100%;border-bottom:1px solid var(--grid);padding-bottom:4px;margin-bottom:2px}
 .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 </style>
 </head>
@@ -114,30 +119,36 @@ th[aria-sort="ascending"]::after{content:" ↑"}
   <div>
     <div class="sub" id="sub"></div>
   </div>
-  <nav class="tabs" aria-label="Vues">
-    <a href="#carte" data-v="carte">Carte</a>
-    <a href="#courbes" data-v="courbes">Courbes et tableau</a>
-  </nav>
 </header>
 
-<div class="wkbar"><label for="wk">Semaine épidémiologique</label><select id="wk"></select><span class="ksc" id="wkn">Le filtre s’applique aux chiffres clés, à la carte, aux courbes, au tableau et au rapport.</span></div>
+<div class="fbar" role="group" aria-label="Filtres synchronisés">
+  <div class="fgrp">
+    <span class="flabel">Province</span>
+    <select id="prov" aria-label="Province"></select>
+  </div>
+  <div class="fgrp">
+    <span class="flabel">Indicateur</span>
+    <div class="seg" id="metric" role="group" aria-label="Indicateur">
+      <button data-m="c" aria-pressed="true">Cas cumulés</button>
+      <button data-m="d">Décès cumulés</button>
+    </div>
+  </div>
+  <div class="fgrp wkgrp" id="wkgrp">
+    <span class="flabel">Semaines épidémiologiques <span class="ksc" id="wkn" style="font-weight:500"></span></span>
+    <div class="wkchecks" id="wkchecks"></div>
+  </div>
+  <div class="fgrp">
+    <span class="flabel" aria-hidden="true">&nbsp;</span>
+    <button class="reset" id="reset" type="button">Réinitialiser</button>
+  </div>
+</div>
 
 <section class="panel" aria-label="Chiffres clés"><h2>Chiffres clés</h2><div class="kpis" id="kpis"><p class="ksc">Chargement des données épidémiologiques…</p></div><p class="ksc" id="ksc"></p></section>
 
-<section class="view" id="v-carte">
+<section id="v-carte">
   <div class="card">
     <h2>Cas confirmés par zone de santé</h2>
     <div class="hint">Survolez une zone pour le détail · molette ou pincement pour zoomer, glisser pour déplacer.</div>
-    <div class="filters">
-      <div class="seg" id="metric" role="group" aria-label="Indicateur">
-        <button data-m="c7" hidden>Cas de la semaine</button>
-        <button data-m="c" aria-pressed="true">Cas cumulés</button>
-        <button data-m="c21">Cas, 21 derniers jours</button>
-        <button data-m="d">Décès cumulés</button>
-      </div>
-      <select id="prov" aria-label="Province"></select>
-      <button class="reset" id="reset">Vue d'ensemble</button>
-    </div>
     <div class="maprow">
       <div>
         <svg id="map" role="img" aria-label="Carte des zones de santé de la RDC"></svg>
@@ -151,33 +162,17 @@ th[aria-sort="ascending"]::after{content:" ↑"}
   </div>
 </section>
 
-<section class="view" id="v-courbes">
-  <div class="grid2">
-    <div class="card">
-      <h2><span class="dot" style="background:var(--series-1)"></span>Nouveaux cas confirmés par semaine</h2>
-      <div class="hint">Semaines commençant le lundi, selon la date du rapport.</div>
-      <svg class="chart" id="chCases"></svg>
-    </div>
-    <div class="card">
-      <h2><span class="dot" style="background:var(--series-2)"></span>Nouveaux décès confirmés par semaine</h2>
-      <div class="hint">Semaines commençant le lundi, selon la date du rapport.</div>
-      <svg class="chart" id="chDeaths"></svg>
-    </div>
-  </div>
-  <div class="card">
-    <h2>Cas confirmés cumulés</h2>
-    <div class="hint">Total national, d'après chaque rapport de situation.</div>
-    <svg class="chart" id="chCum"></svg>
-  </div>
+<section id="v-courbes">
   <div class="card">
     <h2>Zones de santé touchées</h2>
     <div class="filters">
-      <input type="search" id="q" placeholder="Rechercher une zone ou une province" aria-label="Rechercher">
-      <select id="prov2" aria-label="Province"></select>
+      <span class="ksc" id="tblcap" style="flex:1 1 auto"></span>
+      <button class="reset" id="dlxlsx" type="button" title="Télécharger le tableau au format Excel">⬇ Excel (.xlsx)</button>
+      <button class="reset" id="dlcsv" type="button" title="Télécharger le tableau au format CSV">⬇ CSV (.csv)</button>
     </div>
     <div class="tblwrap"><table id="tbl"><thead><tr>
-      <th data-k="z">Zone de santé</th><th data-k="p">Province</th><th data-k="c">Cas cumulés</th>
-      <th data-k="c7">Cas 7 j</th><th data-k="c21">Cas 21 j</th><th data-k="d">Décès</th>
+      <th data-k="z">Zone de santé</th><th data-k="p">Province</th>
+      <th data-k="c">Cas cumulés</th><th data-k="d">Décès cumulés</th>
       <th data-k="cfr">Létalité</th><th data-k="inc">Cas / 100 000 hab.</th><th data-k="first">Premier cas</th>
     </tr></thead><tbody></tbody></table></div>
   </div>
@@ -212,21 +207,43 @@ const dShort = s => { const [y,m,d] = s.split('-').map(Number); return d + ' ' +
 const NS = 'http://www.w3.org/2000/svg';
 const el = (t, a = {}, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
 
-const zones0 = DATA.zones.map(z => ({...z, cfr: z.d != null && z.c ? z.d / z.c : null, inc: z.pop ? z.c / z.pop * 1e5 : null}));
-let zones = zones0, byName = Object.fromEntries(zones.map(z => [z.z, z]));
-/* ---------- filtre « semaine épidémiologique » (semaines ISO du lundi au dimanche, comme les autres pages) ---------- */
+const zones0 = DATA.zones;                         // données brutes par zone (avec .w hebdomadaire si disponible)
+let zones = [], byName = {};
+/* ---------- semaines épidémiologiques (ISO, du lundi au dimanche) ---------- */
 const WEEKS = DATA.weeklyCases.map(w => w[0]);
-let WK = -1;                                       // index de la semaine choisie, -1 = toutes
+const HASW = DATA.zones.some(z => z.w && z.w.length);   // epi.json récent avec données hebdomadaires par zone
+let checked = new Set(WEEKS.map((_, i) => i));          // semaines cochées (toutes par défaut)
+const allW = () => checked.size === WEEKS.length;
 const addD = (s, n) => new Date(Date.parse(s) + n * 864e5).toISOString().slice(0, 10);
 const isoW = s => { const d = new Date(s + 'T00:00:00Z'), t = new Date(d); t.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
   const y = t.getUTCFullYear(), j = new Date(Date.UTC(y, 0, 4)); return [y, 1 + Math.round(((t - j) / 864e5 - 3 + ((j.getUTCDay() + 6) % 7)) / 7)]; };
 const wInfo = i => { const m = WEEKS[i], s = addD(m, 6), [y, n] = isoW(m), end = s < DATA.updated ? s : DATA.updated;
   return {se: 'SE' + String(n).padStart(2, '0'), y, m, s, end, cur: s > DATA.updated,
     rng: 'du ' + dShort(m) + ' au ' + dShort(s), lab: 'SE' + String(n).padStart(2, '0') + ' ' + y + ' (' + dShort(m) + ' – ' + dShort(s) + ')'}; };
-const zAt = i => i < 0 ? zones0 : zones0.map(z => { const w = z.w || [], r = w[i] || [0, 0, 0, 0], r3 = i >= 3 ? w[i - 3] : null, c = r[2], d = z.d == null ? null : r[3];
-  return {...z, c, d, c7: r[0], wd: r[1], c21: Math.max(0, c - (r3 ? r3[2] : 0)), cfr: d != null && c ? d / c : null, inc: z.pop ? c / z.pop * 1e5 : null}; });
-const natAt = day => { let r = DATA.cum[0]; for (const x of DATA.cum) if (x[0] <= day) r = x; return r; };
 const last = DATA.cum[DATA.cum.length - 1];
+// Valeurs d'une zone pour les semaines cochées : somme des nouveaux cas/décès de ces semaines
+// (= cumul sur la période choisie). Toutes les semaines cochées → totaux cumulés officiels (z.c / z.d).
+function zval(z) {
+  if (!HASW || allW()) return {c: z.c, d: z.d};
+  let c = 0, dd = 0; const w = z.w || [];
+  checked.forEach(i => { const r = w[i]; if (r) { c += r[0] || 0; dd += r[1] || 0; } });
+  return {c, d: z.d == null ? null : dd};
+}
+function recompute() {
+  zones = zones0.map(z => { const v = zval(z), c = v.c, d = v.d;
+    return {...z, c, d, cfr: d != null && c ? d / c : null, inc: z.pop ? c / z.pop * 1e5 : null}; });
+  byName = Object.fromEntries(zones.map(z => [z.z, z]));
+}
+// Libellé de la période sélectionnée (pour les titres et l'export).
+function periodLabel() {
+  if (!HASW || allW()) return {tag: 'toutes les semaines', short: 'toutes les semaines', long: 'cumul au ' + dShort(DATA.updated), file: 'toutes_semaines', count: WEEKS.length};
+  const idx = [...checked].sort((a, b) => a - b);
+  if (!idx.length) return {tag: 'aucune semaine', short: 'aucune semaine', long: 'aucune semaine sélectionnée', file: 'aucune_semaine', count: 0};
+  const a = wInfo(idx[0]), b = wInfo(idx[idx.length - 1]);
+  const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1;
+  const tag = idx.length === 1 ? a.se + ' ' + a.y : contiguous ? a.se + '–' + b.se + ' ' + b.y : idx.length + ' semaines';
+  return {tag, short: tag, long: 'cumul sur ' + tag, file: idx.length === 1 ? a.se + '-' + a.y : contiguous ? a.se + '-' + b.se : idx.length + 'sem', count: idx.length};
+}
 
 /* ---------- tooltip ---------- */
 const tip = $('#tip');
@@ -241,68 +258,41 @@ function showTip(ev, title, rows) {
 }
 const hideTip = () => tip.style.display = 'none';
 
-/* ---------- header + KPIs ---------- */
-$('#sub').textContent = 'Données au ' + dFr(DATA.updated) + ' · source : INSP / INRB';
-const wk = DATA.weeklyCases, wd = DATA.weeklyDeaths;
-const c7 = zones.reduce((a, z) => a + z.c7, 0);
-const active = zones.filter(z => z.c21 > 0).length;
-const nZS = DATA.map.length;
+/* ---------- chiffres clés + contexte ---------- */
 let SEL = null;                                   // zone de santé sélectionnée (nom), ou null
 function drawKpis() {
-  let K2 = null;
   const p = $('#prov').value, z = SEL ? byName[SEL] : null, nat = !p && !SEL;
   const zs = SEL ? (z ? [z] : []) : p ? zones.filter(x => x.p === p) : zones;
-  const sum = k => zs.reduce((a, x) => a + (x[k] || 0), 0);
-  const c = nat ? last[1] : sum('c'), d = nat ? last[2] : sum('d'), r = nat ? last[3] : null, n7 = sum('c7'), n21 = sum('c21');
-  const tot = SEL ? 1 : p ? DATA.map.filter(f => f.p === p).length : nZS, tz = zs.filter(x => x.c > 0).length, act = zs.filter(x => x.c21 > 0).length;
-  const day = 'jusqu\'au ' + dShort(DATA.updated);
-  if (WK >= 0) {                                   // semaine épidémiologique choisie
-    const W = wInfo(WK), nr = natAt(W.end), nc = nat ? DATA.weeklyCases[WK][1] : sum('c7'), nd = nat ? DATA.weeklyDeaths[WK][1] : sum('wd');
-    const cc = nat ? nr[1] : c, cd = nat ? nr[2] : d, wz = zs.filter(x => x.c7 > 0).length, rg = W.rng + (W.cur ? ' (en cours)' : '');
-    K2 = SEL ? [
-      [fmt(nc), rg, 'Nouveaux cas, ' + W.se, 'var(--app-mar)'],
-      [fmt(nd), rg, 'Nouveaux décès, ' + W.se, 'var(--c-red)'],
-      [fmt(cc), 'cumul au ' + dShort(W.end), 'Cas confirmés', 'var(--app-mar)'],
-      [fmt(cd), cc ? pct(cd / cc) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
-      [fmt(n21), 'sur 21 jours au ' + dShort(W.end), 'Cas, 21 jours', 'var(--c-or)'],
-      [z && z.inc != null ? Math.round(z.inc).toLocaleString('fr-FR') : '—', z && z.pop ? fmt(z.pop) + ' habitants' : 'population inconnue', 'Cas pour 100 000 habitants', 'var(--app-mar)'],
-    ] : [
-      [fmt(nc), rg, 'Nouveaux cas, ' + W.se, 'var(--app-mar)'],
-      [fmt(nd), rg, 'Nouveaux décès, ' + W.se, 'var(--c-red)'],
-      [fmt(cc), 'cumul au ' + dShort(W.end), 'Cas confirmés', 'var(--app-mar)'],
-      [fmt(cd), cc ? pct(cd / cc) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
-      [fmt(wz) + '/' + fmt(tot), pct(wz / Math.max(1, tot)), 'Zones avec des cas, ' + W.se, 'var(--c-or)'],
-      [fmt(act), tz ? pct(act / tz) + ' des zones touchées' : '—', 'Zones avec des cas sur 21 jours', 'var(--c-or)'],
-    ];
-  }
-  const K = K2 || (SEL ? [   // [valeur, ligne en gras, libellé, couleur]
-    [fmt(c), 'cumul au ' + dShort(DATA.updated), 'Cas confirmés', 'var(--app-mar)'],
-    [fmt(d), c ? pct(d / c) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
-    [fmt(n7), day, 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
-    [fmt(n21), c ? pct(n21 / c) + ' des cas' : '—', 'Cas, 21 derniers jours', 'var(--c-or)'],
+  const C = zs.reduce((a, x) => a + (x.c || 0), 0), D = zs.reduce((a, x) => a + (x.d || 0), 0);
+  const tot = SEL ? 1 : p ? DATA.map.filter(f => f.p === p).length : DATA.map.length;
+  const tz = zs.filter(x => x.c > 0).length;
+  const P = periodLabel(), rec = (nat && (!HASW || allW())) ? last[3] : null;
+  const K = SEL ? [   // [valeur, ligne en gras, libellé, couleur]
+    [fmt(C), P.long, 'Cas cumulés', 'var(--app-mar)'],
+    [fmt(D), C ? pct(D / C) + ' de létalité' : '—', 'Décès cumulés', 'var(--c-red)'],
     [z && z.inc != null ? Math.round(z.inc).toLocaleString('fr-FR') : '—', z && z.pop ? fmt(z.pop) + ' habitants' : 'population inconnue', 'Cas pour 100 000 habitants', 'var(--app-mar)'],
-    [z ? dShort(z.first) : '—', z ? 'mise à jour : ' + dShort(z.upd) : 'aucun cas confirmé', 'Premier cas confirmé', 'var(--c-gr)'],
+    [z ? dShort(z.first) : '—', z ? 'mise à jour : ' + dShort(z.upd) : '—', 'Premier cas confirmé', 'var(--c-gr)'],
   ] : [
-    [fmt(c), 'cumul au ' + dShort(DATA.updated), 'Cas confirmés', 'var(--app-mar)'],
-    [fmt(d), c ? pct(d / c) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
-    [r == null ? '—' : fmt(r), r == null ? 'donnée nationale uniquement' : pct(r / c) + ' des cas confirmés', 'Guérisons', 'var(--c-gr)'],
-    [fmt(n7), day, 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
+    [fmt(C), P.long, 'Cas cumulés', 'var(--app-mar)'],
+    [fmt(D), C ? pct(D / C) + ' de létalité' : '—', 'Décès cumulés', 'var(--c-red)'],
+    [C ? pct(D / C) : '—', 'décès / cas confirmés', 'Létalité', 'var(--c-red)'],
     [fmt(tz) + '/' + fmt(tot), pct(tz / Math.max(1, tot)), 'Zones de santé touchées', 'var(--app-mar)'],
-    [fmt(act), tz ? pct(act / tz) + ' des zones touchées' : '—', 'Zones avec des cas sur 21 jours', 'var(--c-or)'],
-  ]);
+  ];
+  if (nat && rec != null) K.push([fmt(rec), C ? pct(rec / C) + ' des cas confirmés' : 'donnée nationale', 'Guérisons (national)', 'var(--c-gr)']);
   $('#kpis').innerHTML = K.map(k => `<div class="k" style="border-top-color:${k[3]}"><b style="color:${k[3]}">${k[0]}</b><em>${k[1]}</em><span>${k[2]}</span></div>`).join('');
-  $('#ksc').textContent = (WK >= 0 ? 'Semaine : ' + wInfo(WK).lab + ' · ' : '') + 'Périmètre : ' + (SEL ? 'zone de santé de ' + SEL + (z ? ' (' + z.p + ')' : '') : p ? 'province de ' + p : 'République démocratique du Congo') + (SEL || p ? ' · cliquez de nouveau sur la zone ou sur « Vue d\'ensemble » pour revenir' : ' · cliquez sur une zone de santé de la carte pour la sélectionner');
   window.EPI_K = K;
 }
-
-/* ---------- views (hash routing) ---------- */
-function route() {
-  const v = location.hash === '#courbes' ? 'courbes' : 'carte';
-  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  document.querySelectorAll('.tabs a').forEach(a => a.dataset.v === v ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-  if (v === 'courbes') drawCharts(); else if (shapes) fitProv();
+function updateContext() {
+  const p = $('#prov').value, P = periodLabel();
+  const nw = HASW ? (allW() ? 'toutes (' + WEEKS.length + ')' : P.count + ' / ' + WEEKS.length) : '—';
+  $('#sub').textContent = 'Données au ' + dFr(DATA.updated) + ' · source : INSP / INRB' + (HASW && !allW() ? ' · ' + P.long : '');
+  const wkn = $('#wkn'); if (wkn) wkn.textContent = HASW ? (allW() ? '(toutes)' : P.short) : '';
+  $('#ksc').textContent = 'Indicateur : ' + LABEL[metric] + ' · Semaines : ' + nw + ' · Périmètre : ' +
+    (SEL ? 'zone de santé de ' + SEL + (byName[SEL] ? ' (' + byName[SEL].p + ')' : '') : p ? 'province de ' + p : 'République démocratique du Congo') +
+    (SEL || p ? ' · « Réinitialiser » pour revenir' : ' · cliquez sur une zone de la carte pour la sélectionner');
 }
-addEventListener('hashchange', route);
+
+/* ---------- page unique : plus d'onglets ni de routage, tous les visuels sont affichés ensemble ---------- */
 
 /* ---------- map ---------- */
 const svg = $('#map');
@@ -329,14 +319,14 @@ const shapes = DATA.map.map(f => {
 const gProv = el('g', {}, svg);
 (DATA.prov || []).forEach(f => el('path', {d: toPath(f.t, f.g)[0], class: 'pv'}, gProv));
 const provinces = [...new Set(DATA.map.map(f => f.p))].sort((a, b) => a.localeCompare(b, 'fr'));
-const affectedProv = [...new Set(zones.map(z => z.p))].sort((a, b) => a.localeCompare(b, 'fr'));
-for (const id of ['#prov', '#prov2']) $(id).innerHTML = '<option value="">Toutes les provinces</option>' +
+const affectedProv = [...new Set(zones0.map(z => z.p))].sort((a, b) => a.localeCompare(b, 'fr'));
+$('#prov').innerHTML = '<option value="">Toutes les provinces</option>' +
   affectedProv.map(p => `<option>${p}</option>`).join('') +
-  (id === '#prov' ? '<optgroup label="Sans cas confirmé">' + provinces.filter(p => !affectedProv.includes(p)).map(p => `<option>${p}</option>`).join('') + '</optgroup>' : '');
+  '<optgroup label="Sans cas confirmé">' + provinces.filter(p => !affectedProv.includes(p)).map(p => `<option>${p}</option>`).join('') + '</optgroup>';
 
 let metric = 'c', vb = null;
-const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], c21: [1, 5, 10, 25, 50, 100, 200], d: [1, 5, 25, 50, 100, 250, 500], c7: [1, 5, 10, 25, 50, 100, 200]};
-const LABEL = {c: 'cas cumulés', c21: 'cas sur 21 jours', d: 'décès cumulés', c7: 'cas de la semaine'};
+const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], d: [1, 5, 25, 50, 100, 250, 500]};
+const LABEL = {c: 'cas cumulés', d: 'décès cumulés'};
 const colorFor = v => { if (!v) return 'var(--empty)'; const b = BINS[metric]; let i = 0; while (i < b.length - 1 && v >= b[i + 1]) i++; return `var(--s${i + 1})`; };
 function paintMap() {
   gMap.parentNode.appendChild(gProv);
@@ -371,23 +361,32 @@ function fitProv() {
 shapes.forEach(s => {
   s.el.addEventListener('pointermove', ev => {
     const z = byName[s.n];
-    showTip(ev, s.n + ' <span style="color:var(--text-muted);font-weight:400">· ' + s.p + '</span>', z ? (WK >= 0 ? [['Cas, ' + wInfo(WK).se, fmt(z.c7)], ['Décès, ' + wInfo(WK).se, fmt(z.wd)]] : []).concat([
-      ['Cas cumulés', fmt(z.c)], ['Cas, 21 derniers jours', fmt(z.c21)], ['Décès cumulés', fmt(z.d)], ['Létalité', pct(z.cfr)], ['Premier cas', dShort(z.first)]
-    ]).concat([['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]) : [['Cas confirmés', '0'], ['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]);
+    showTip(ev, s.n + ' <span style="color:var(--text-muted);font-weight:400">· ' + s.p + '</span>', z ? [
+      ['Cas cumulés', fmt(z.c)], ['Décès cumulés', fmt(z.d)], ['Létalité', pct(z.cfr)], ['Cas / 100 000 hab.', z.inc == null ? '—' : Math.round(z.inc).toLocaleString('fr-FR')], ['Premier cas', dShort(z.first)],
+      ['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']
+    ] : [['Cas confirmés', '0'], ['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]);
   });
   s.el.addEventListener('pointerleave', hideTip);
 });
+/* ---------- synchronisation de tous les visuels ---------- */
+function redraw() { fitProv(); drawKpis(); drawTable(); updateContext(); }   // province / zone / indicateur : valeurs inchangées
+function apply() { recompute(); redraw(); }                                   // semaines : recalcule les valeurs par zone
 $('#metric').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
-  metric = b.dataset.m; $('#metric').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); paintMap(); });
+  metric = b.dataset.m; $('#metric').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); paintMap(); drawTable(); updateContext(); });
 function zoomTo(s) { const w = s.b[2] - s.b[0], h = s.b[3] - s.b[1], m = Math.max(w, h) * 2.5; setVB([s.b[0] - m, s.b[1] - m, s.b[2] + m, s.b[3] + m], 0); }
 function selectZone(n) {
-  if (SEL === n) { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); fitProv(); drawKpis(); return; }
+  if (SEL === n) { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); redraw(); return; }
   const s = shapes.find(x => x.n === n); if (!s) return;
   SEL = n; $('#prov').value = s.p; fitProv();
-  shapes.forEach(x => x.el.classList.toggle('sel', x === s)); gMap.appendChild(s.el); zoomTo(s); drawKpis();
+  shapes.forEach(x => x.el.classList.toggle('sel', x === s)); gMap.appendChild(s.el); zoomTo(s); drawKpis(); drawTable(); updateContext();
 }
-$('#prov').addEventListener('change', () => { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); fitProv(); drawKpis(); });
-$('#reset').addEventListener('click', () => { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); $('#prov').value = ''; fitProv(); drawKpis(); });
+$('#prov').addEventListener('change', () => { SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); redraw(); });
+$('#reset').addEventListener('click', () => {
+  SEL = null; shapes.forEach(x => x.el.classList.remove('sel')); $('#prov').value = '';
+  checked = new Set(WEEKS.map((_, i) => i)); document.querySelectorAll('#wkchecks input').forEach(c => c.checked = true);
+  metric = 'c'; $('#metric').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.m === 'c'));
+  apply();
+});
 $('#rank').addEventListener('click', e => { const li = e.target.closest('li[data-z]'); if (li) selectZone(li.dataset.z); });
 /* zoom & pan */
 const toSvg = (cx, cy) => { const r = svg.getBoundingClientRect(); return [vb[0] + (cx - r.left) / r.width * vb[2], vb[1] + (cy - r.top) / r.height * vb[3]]; };
@@ -410,113 +409,86 @@ const up = e => { ptrs.delete(e.pointerId); pinch = null; svg.style.cursor = 'gr
   if (e.type === 'pointerup' && moved < 6 && downT && downT.classList && downT.classList.contains('z') && downT.__n) selectZone(downT.__n); downT = null; };
 svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
 
-/* ---------- charts ---------- */
-function barChart(svgEl, series, varColor, label) {
-  svgEl.innerHTML = '';
-  const W = Math.max(320, svgEl.clientWidth || 540), H = 240, m = {l: 44, r: 8, t: 10, b: 26};
-  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const max = Math.max(...series.map(d => d[1])) || 1;
-  const step = Math.pow(10, Math.floor(Math.log10(max))) / 2, nice = Math.ceil(max / step) * step;
-  const ticks = [0, .25, .5, .75, 1].map(t => Math.round(nice * t));
-  const y = v => m.t + (H - m.t - m.b) * (1 - v / nice), bw = (W - m.l - m.r) / series.length;
-  ticks.forEach(t => { el('line', {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), class: t ? 'gl' : 'ax'}, svgEl);
-    const tx = el('text', {x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end'}, svgEl); tx.textContent = fmt(t); });
-  series.forEach((d, i) => {
-    const x = m.l + i * bw, h = y(0) - y(d[1]), w = Math.max(1, bw - 2), rr = Math.min(4, w / 2, h);
-    const isLast = i === series.length - 1, op = WK >= 0 && i !== WK ? .28 : isLast ? .45 : 1;
-    const path = h > 0 ? `M${x + 1} ${y(0)}V${y(d[1]) + rr}Q${x + 1} ${y(d[1])} ${x + 1 + rr} ${y(d[1])}H${x + 1 + w - rr}Q${x + 1 + w} ${y(d[1])} ${x + 1 + w} ${y(d[1]) + rr}V${y(0)}Z` : '';
-    const bar = el('path', {d: path, fill: varColor, opacity: op}, svgEl);
-    if (i % Math.ceil(series.length / 7) === 0) { const tx = el('text', {x: x + bw / 2, y: H - 8, 'text-anchor': 'middle'}, svgEl); tx.textContent = dShort(d[0]); }
-    const hit = el('rect', {x, y: m.t, width: bw, height: H - m.t - m.b, class: 'hit'}, svgEl);
-    hit.addEventListener('pointermove', ev => { bar.setAttribute('opacity', .75);
-      const end = new Date(d[0]); end.setDate(end.getDate() + 6);
-      showTip(ev, wInfo(i).se + ' · semaine du ' + dShort(d[0]), [[label, fmt(d[1])]].concat(isLast ? [['', 'semaine incomplète']] : [])); });
-    hit.addEventListener('pointerleave', () => { bar.setAttribute('opacity', op); hideTip(); });
-  });
-}
-function lineChart(svgEl, rows) {
-  svgEl.innerHTML = '';
-  const W = Math.max(320, svgEl.clientWidth || 1000), Wd = W, H = 260, m = {l: 54, r: 70, t: 12, b: 26};
-  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const t0 = Date.parse(rows[0][0]), t1 = Date.parse(rows[rows.length - 1][0]);
-  const max = Math.max(...rows.map(r => r[1])), step = Math.pow(10, Math.floor(Math.log10(max))) / 2, nice = Math.ceil(max / step) * step;
-  const x = s => m.l + (W - m.l - m.r) * (Date.parse(s) - t0) / (t1 - t0), y = v => m.t + (H - m.t - m.b) * (1 - v / nice);
-  [0, .25, .5, .75, 1].forEach(t => { const v = Math.round(nice * t); el('line', {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: t ? 'gl' : 'ax'}, svgEl);
-    const tx = el('text', {x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end'}, svgEl); tx.textContent = fmt(v); });
-  for (let d = new Date(rows[0][0].slice(0, 8) + '01'); d <= new Date(t1); d.setMonth(d.getMonth() + 1)) {
-    const s = d.toISOString().slice(0, 10); if (Date.parse(s) < t0) continue;
-    const tx = el('text', {x: x(s), y: H - 8, 'text-anchor': 'middle'}, svgEl); tx.textContent = MOIS[d.getMonth()]; }
-  if (WK >= 0) { const W = wInfo(WK), a = Math.max(t0, Date.parse(W.m)), b = Math.min(t1, Date.parse(W.s));
-    const X = v => m.l + (Wd - m.l - m.r) * (v - t0) / (t1 - t0); el('rect', {x: X(a), y: m.t, width: Math.max(3, X(b) - X(a)), height: H - m.t - m.b, fill: 'var(--series-1)', opacity: .14}, svgEl);
-    const tw = el('text', {x: X(a) - 4, y: m.t + 12, 'text-anchor': 'end', style: 'fill:var(--text-secondary);font-weight:600'}, svgEl); tw.textContent = W.se; }
-  el('path', {d: rows.map((r, i) => (i ? 'L' : 'M') + x(r[0]).toFixed(1) + ' ' + y(r[1]).toFixed(1)).join(''), fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 2, 'stroke-linejoin': 'round'}, svgEl);
-  const lr = rows[rows.length - 1];
-  el('circle', {cx: x(lr[0]), cy: y(lr[1]), r: 4, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2}, svgEl);
-  const lt = el('text', {x: x(lr[0]) + 8, y: y(lr[1]) + 4, style: 'fill:var(--text-primary);font-weight:600'}, svgEl); lt.textContent = fmt(lr[1]);
-  const cross = el('line', {y1: m.t, y2: H - m.b, stroke: 'var(--text-muted)', 'stroke-dasharray': '3 3', visibility: 'hidden'}, svgEl);
-  const dot = el('circle', {r: 4, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2, visibility: 'hidden'}, svgEl);
-  const hit = el('rect', {x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, class: 'hit'}, svgEl);
-  hit.addEventListener('pointermove', ev => {
-    const r = svgEl.getBoundingClientRect(), px = (ev.clientX - r.left) / r.width * W;
-    let best = rows[0]; for (const row of rows) if (Math.abs(x(row[0]) - px) < Math.abs(x(best[0]) - px)) best = row;
-    cross.setAttribute('x1', x(best[0])); cross.setAttribute('x2', x(best[0])); cross.setAttribute('visibility', 'visible');
-    dot.setAttribute('cx', x(best[0])); dot.setAttribute('cy', y(best[1])); dot.setAttribute('visibility', 'visible');
-    showTip(ev, dFr(best[0]), [['Cas confirmés', fmt(best[1])], ['Décès confirmés', fmt(best[2])], ['Guérisons', fmt(best[3])]]);
-  });
-  hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); hideTip(); });
-}
-function drawCharts() {
-  barChart($('#chCases'), wk, 'var(--series-1)', 'Nouveaux cas');
-  barChart($('#chDeaths'), wd, 'var(--series-2)', 'Nouveaux décès');
-  lineChart($('#chCum'), DATA.cum);
-}
+/* ---------- courbes retirées : la page ne conserve que les chiffres clés, la carte et le tableau ---------- */
 
-/* ---------- table ---------- */
+/* ---------- table (filtrée par province, valeurs selon les semaines cochées) ---------- */
 let sortK = 'c', sortDir = -1;
 function drawTable() {
-  const q = $('#q').value.trim().toLowerCase(), p = $('#prov2').value;
-  const rows = zones.filter(z => z.c > 0 && (!p || z.p === p) && (!q || (z.z + ' ' + z.p).toLowerCase().includes(q)))
+  const p = $('#prov').value;
+  const rows = zones.filter(z => z.c > 0 && (!p || z.p === p))
     .sort((a, b) => { const A = a[sortK], B = b[sortK]; if (A == null) return 1; if (B == null) return -1;
       return (typeof A === 'string' ? A.localeCompare(B, 'fr') : A - B) * sortDir; });
-  $('#tbl tbody').innerHTML = rows.map(z => `<tr><td>${z.z}</td><td>${z.p}</td><td>${fmt(z.c)}</td><td>${fmt(z.c7)}</td><td>${fmt(z.c21)}</td><td>${fmt(z.d)}</td><td>${pct(z.cfr)}</td><td>${z.inc == null ? '—' : Math.round(z.inc).toLocaleString('fr-FR')}</td><td>${dShort(z.first)}</td></tr>`).join('')
-    || '<tr><td colspan="9" style="text-align:left;color:var(--text-muted)">Aucune zone ne correspond.</td></tr>';
+  $('#tbl tbody').innerHTML = rows.map(z => `<tr><td>${z.z}</td><td>${z.p}</td><td>${fmt(z.c)}</td><td>${fmt(z.d)}</td><td>${pct(z.cfr)}</td><td>${z.inc == null ? '—' : Math.round(z.inc).toLocaleString('fr-FR')}</td><td>${dShort(z.first)}</td></tr>`).join('')
+    || '<tr><td colspan="7" style="text-align:left;color:var(--text-muted)">Aucune zone ne correspond.</td></tr>';
   document.querySelectorAll('#tbl th').forEach(th => th.dataset.k === sortK ? th.setAttribute('aria-sort', sortDir > 0 ? 'ascending' : 'descending') : th.removeAttribute('aria-sort'));
+  const cap = $('#tblcap'); if (cap) cap.textContent = rows.length + ' zone' + (rows.length > 1 ? 's' : '') + ' · ' + LABEL[metric] + ' · ' + periodLabel().short + (p ? ' · ' + p : '');
 }
 document.querySelectorAll('#tbl th').forEach(th => th.addEventListener('click', () => {
   if (sortK === th.dataset.k) sortDir *= -1; else { sortK = th.dataset.k; sortDir = ['z', 'p', 'first'].includes(sortK) ? 1 : -1; } drawTable(); }));
-$('#q').addEventListener('input', drawTable); $('#prov2').addEventListener('change', drawTable);
 
-/* ---------- application du filtre des semaines ---------- */
-const MB = {}; $('#metric').querySelectorAll('button').forEach(b => MB[b.dataset.m] = b);
-const TH = {}; document.querySelectorAll('#tbl th').forEach(th => TH[th.dataset.k] = th);
-function setWeek(i) {
-  WK = i; zones = zAt(i); byName = Object.fromEntries(zones.map(z => [z.z, z]));
-  const W = i >= 0 ? wInfo(i) : null;
-  LABEL.c7 = W ? 'cas de la ' + W.se : 'cas de la semaine';
-  LABEL.c = W ? 'cas cumulés au ' + dShort(W.end) : 'cas cumulés';
-  LABEL.c21 = W ? 'cas sur 21 jours au ' + dShort(W.end) : 'cas sur 21 jours';
-  LABEL.d = W ? 'décès cumulés au ' + dShort(W.end) : 'décès cumulés';
-  MB.c7.hidden = !W; MB.c7.textContent = W ? 'Cas de la ' + W.se : 'Cas de la semaine';
-  MB.c21.textContent = W ? 'Cas, 21 jours' : 'Cas, 21 derniers jours';
-  if (W && metric !== 'c7') metric = 'c7'; else if (!W && metric === 'c7') metric = 'c';
-  Object.values(MB).forEach(x => x.setAttribute('aria-pressed', x.dataset.m === metric));
-  TH.c.textContent = W ? 'Cas cumulés (fin ' + W.se + ')' : 'Cas cumulés'; TH.c7.textContent = W ? 'Cas ' + W.se : 'Cas 7 j';
-  TH.d.textContent = W ? 'Décès (fin ' + W.se + ')' : 'Décès';
-  $('#sub').textContent = 'Données au ' + dFr(DATA.updated) + ' · source : INSP / INRB' + (W ? ' · filtre : ' + W.lab : '');
-  fitProv(); drawKpis(); drawTable(); if (location.hash === '#courbes') drawCharts();
+/* ---------- semaines épidémiologiques (cases à cocher, multi-sélection) ---------- */
+function buildWeekChecks() {
+  const box = $('#wkchecks');
+  if (!HASW) { $('#wkgrp').hidden = true; return; }   // ancien epi.json sans données hebdomadaires : pas de filtre semaines
+  box.innerHTML = '<label class="wkall"><input type="checkbox" id="wkall" checked> Toutes les semaines</label>' +
+    WEEKS.map((m, i) => i).reverse().map(i => { const W = wInfo(i); return `<label title="${W.lab}"><input type="checkbox" class="wkc" value="${i}" checked> ${W.se}${W.cur ? ' •' : ''}</label>`; }).join('');
+  box.addEventListener('change', e => {
+    const t = e.target;
+    if (t.id === 'wkall') { checked = t.checked ? new Set(WEEKS.map((_, i) => i)) : new Set(); box.querySelectorAll('.wkc').forEach(c => c.checked = t.checked); }
+    else if (t.classList.contains('wkc')) { const i = +t.value; if (t.checked) checked.add(i); else checked.delete(i); const a = $('#wkall'); if (a) a.checked = allW(); }
+    apply();
+  });
 }
-$('#wk').innerHTML = '<option value="-1">Toutes les semaines (au ' + dShort(DATA.updated) + ')</option>' +
-  WEEKS.map((m, i) => i).reverse().map(i => { const W = wInfo(i); return `<option value="${i}">${W.lab}${W.cur ? ' · en cours' : ''}</option>`; }).join('');
-$('#wk').addEventListener('change', e => setWeek(+e.target.value));
-if (!DATA.zones.some(z => z.w)) $('.wkbar').hidden = true;   // ancien epi.json (avant la synchronisation) : filtre masqué
+
+/* ---------- téléchargement du tableau (Excel .xlsx / CSV), comme la page Évaluations ---------- */
+function exportAoA() {                                        // mêmes filtres et tri que le tableau affiché (province + semaines cochées)
+  const p = $('#prov').value;
+  const rows = zones.filter(z => z.c > 0 && (!p || z.p === p))
+    .sort((a, b) => { const A = a[sortK], B = b[sortK]; if (A == null) return 1; if (B == null) return -1;
+      return (typeof A === 'string' ? A.localeCompare(B, 'fr') : A - B) * sortDir; });
+  const head = ['Zone de santé', 'Province', 'Cas cumulés', 'Décès cumulés', 'Létalité (%)', 'Cas / 100 000 hab.', 'Premier cas'];
+  const body = rows.map(z => [z.z, z.p, z.c, z.d,
+    (z.cfr == null || !isFinite(z.cfr)) ? '' : +(z.cfr * 100).toFixed(1),
+    z.inc == null ? '' : Math.round(z.inc), z.first]);
+  return [head, ...body];
+}
+function exportName() { const p = $('#prov').value; return 'zones_sante_touchees_MVE17_' + periodLabel().file + (p ? '_' + p.replace(/\s+/g, '-') : '') + '_' + DATA.updated; }
+function saveBlob(blob, name) { const u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 4000); }
+$('#dlcsv').addEventListener('click', () => {
+  const sep = ';', csv = '﻿' + exportAoA().map(r => r.map(c => { const s = c == null ? '' : String(c); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(sep)).join('\r\n');
+  saveBlob(new Blob([csv], {type: 'text/csv;charset=utf-8'}), exportName() + '.csv');
+});
+async function ensureXLSX() {                                 // SheetJS : réutilise celui de l'application si présent, sinon chargement à la demande
+  if (window.XLSX) return window.XLSX;
+  try { if (parent && parent.XLSX) return window.XLSX = parent.XLSX; } catch (e) {}
+  await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  return window.XLSX;
+}
+$('#dlxlsx').addEventListener('click', async () => {
+  const btn = $('#dlxlsx'), old = btn.textContent;
+  try {
+    btn.textContent = '…'; const X = await ensureXLSX(); const aoa = exportAoA();
+    const ws = X.utils.aoa_to_sheet(aoa), wb = X.utils.book_new();
+    ws['!cols'] = [{wch: 26}, {wch: 16}, {wch: 14}, {wch: 14}, {wch: 12}, {wch: 18}, {wch: 12}];
+    X.utils.book_append_sheet(wb, ws, 'Zones de santé');
+    saveBlob(new Blob([X.write(wb, {bookType: 'xlsx', type: 'array'})], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), exportName() + '.xlsx');
+  } catch (e) { btn.textContent = 'Excel indisponible'; setTimeout(() => btn.textContent = old, 2500); return; }
+  btn.textContent = old;
+});
 
 /* ---------- start ---------- */
-route();
+buildWeekChecks();
+recompute();
+fitProv();
 drawTable();
 drawKpis();
-let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { fitProv(); if (location.hash === '#courbes') drawCharts(); }, 150); });
-window.EPI = {DATA, get zones() { return zones; }, get byName() { return byName; }, BINS, LABEL, setWeek, weeks: () => WEEKS.map((m, i) => wInfo(i)),
-  st: () => { const W = WK >= 0 ? wInfo(WK) : null; return {p: $('#prov').value, sel: SEL, wk: WK, wl: W ? W.lab : '', se: W ? W.se + '-' + W.y : '', asOf: W ? W.end : DATA.updated}; }, K: () => window.EPI_K};
+updateContext();
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { fitProv(); }, 150); });
+window.EPI = {DATA, get zones() { return zones; }, get byName() { return byName; }, BINS, LABEL, get metric() { return metric; },
+  weeks: () => WEEKS.map((m, i) => wInfo(i)),
+  setWeeks: (arr) => { checked = new Set(arr); document.querySelectorAll('#wkchecks .wkc').forEach(c => c.checked = checked.has(+c.value)); const a = $('#wkall'); if (a) a.checked = allW(); apply(); },
+  setProv: (p) => { $('#prov').value = p || ''; SEL = null; redraw(); },
+  st: () => ({p: $('#prov').value, sel: SEL, weeks: [...checked].sort((a, b) => a - b), period: periodLabel().short, metric}), K: () => window.EPI_K};
 sendH();
 })();
 </script>
