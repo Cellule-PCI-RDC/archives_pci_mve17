@@ -1,4 +1,4 @@
-# Construit epi.json (page « Actualité Epidémio ») à partir du dépôt public INRB-UMIE/BDBV2026-Data.
+# Construit epi.json (page « Épidémiologie ») à partir du dépôt public INRB-UMIE/BDBV2026-Data.
 # Usage : python build_epidemio.py <dossier build/ du dépôt INRB> <data/aliases.csv> epi.json
 # Dépendance : pip install shapely
 import csv, json, re, sys, datetime as dt, unicodedata
@@ -62,6 +62,13 @@ def weekly(sr):
         out.append([start.isoformat(), w.get(start.isoformat(), 0)]); start += dt.timedelta(days=7)
     return out
 wc, wd = weekly(nat['confirmed_cases']), weekly(nat['confirmed_deaths'])
+# filtre « semaine épidémiologique » : pour chaque zone et chaque semaine (lundi → dimanche),
+# [nouveaux cas, nouveaux décès, cas cumulés au dimanche, décès cumulés au dimanche]
+WEEKS = [w[0] for w in wc]
+for zr in zones:
+    sr, dsr = cc[zr['z']], cd.get(zr['z'], {})
+    nw = dict(weekly(sr)); nd = dict(weekly(dsr)) if dsr else {}
+    zr['w'] = [[nw.get(m, 0), nd.get(m, 0), at(sr, D(m) + dt.timedelta(days=6)), at(dsr, D(m) + dt.timedelta(days=6)) if dsr else 0] for m in WEEKS]
 cum = [[k, nat['confirmed_cases'][k], nat['confirmed_deaths'].get(k), nat['recovered_cases'].get(k)] for k in sorted(nat['confirmed_cases'])]
 feats = []
 for f in g['features']:
