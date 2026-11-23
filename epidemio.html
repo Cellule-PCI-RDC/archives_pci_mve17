@@ -101,6 +101,9 @@ th[aria-sort="ascending"]::after{content:" ↑"}
 #tip .r span:last-child{color:var(--text-primary);font-variant-numeric:tabular-nums;font-weight:600}
 .note{color:var(--text-muted);font-size:12px;margin-top:18px;line-height:1.5}
 .view{display:none}.view.on{display:block}
+.wkbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px;padding:10px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px}
+.wkbar label{font-weight:700;font-size:13.5px;color:var(--text-primary)}
+.wkbar[hidden]{display:none}.wkbar select{min-width:220px}.wkbar .ksc{margin:0}
 .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 </style>
 </head>
@@ -117,6 +120,8 @@ th[aria-sort="ascending"]::after{content:" ↑"}
   </nav>
 </header>
 
+<div class="wkbar"><label for="wk">Semaine épidémiologique</label><select id="wk"></select><span class="ksc" id="wkn">Le filtre s’applique aux chiffres clés, à la carte, aux courbes, au tableau et au rapport.</span></div>
+
 <section class="panel" aria-label="Chiffres clés"><h2>Chiffres clés</h2><div class="kpis" id="kpis"><p class="ksc">Chargement des données épidémiologiques…</p></div><p class="ksc" id="ksc"></p></section>
 
 <section class="view" id="v-carte">
@@ -125,6 +130,7 @@ th[aria-sort="ascending"]::after{content:" ↑"}
     <div class="hint">Survolez une zone pour le détail · molette ou pincement pour zoomer, glisser pour déplacer.</div>
     <div class="filters">
       <div class="seg" id="metric" role="group" aria-label="Indicateur">
+        <button data-m="c7" hidden>Cas de la semaine</button>
         <button data-m="c" aria-pressed="true">Cas cumulés</button>
         <button data-m="c21">Cas, 21 derniers jours</button>
         <button data-m="d">Décès cumulés</button>
@@ -206,8 +212,20 @@ const dShort = s => { const [y,m,d] = s.split('-').map(Number); return d + ' ' +
 const NS = 'http://www.w3.org/2000/svg';
 const el = (t, a = {}, p) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
 
-const zones = DATA.zones.map(z => ({...z, cfr: z.d != null && z.c ? z.d / z.c : null, inc: z.pop ? z.c / z.pop * 1e5 : null}));
-const byName = Object.fromEntries(zones.map(z => [z.z, z]));
+const zones0 = DATA.zones.map(z => ({...z, cfr: z.d != null && z.c ? z.d / z.c : null, inc: z.pop ? z.c / z.pop * 1e5 : null}));
+let zones = zones0, byName = Object.fromEntries(zones.map(z => [z.z, z]));
+/* ---------- filtre « semaine épidémiologique » (semaines ISO du lundi au dimanche, comme les autres pages) ---------- */
+const WEEKS = DATA.weeklyCases.map(w => w[0]);
+let WK = -1;                                       // index de la semaine choisie, -1 = toutes
+const addD = (s, n) => new Date(Date.parse(s) + n * 864e5).toISOString().slice(0, 10);
+const isoW = s => { const d = new Date(s + 'T00:00:00Z'), t = new Date(d); t.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
+  const y = t.getUTCFullYear(), j = new Date(Date.UTC(y, 0, 4)); return [y, 1 + Math.round(((t - j) / 864e5 - 3 + ((j.getUTCDay() + 6) % 7)) / 7)]; };
+const wInfo = i => { const m = WEEKS[i], s = addD(m, 6), [y, n] = isoW(m), end = s < DATA.updated ? s : DATA.updated;
+  return {se: 'SE' + String(n).padStart(2, '0'), y, m, s, end, cur: s > DATA.updated,
+    rng: 'du ' + dShort(m) + ' au ' + dShort(s), lab: 'SE' + String(n).padStart(2, '0') + ' ' + y + ' (' + dShort(m) + ' – ' + dShort(s) + ')'}; };
+const zAt = i => i < 0 ? zones0 : zones0.map(z => { const w = z.w || [], r = w[i] || [0, 0, 0, 0], r3 = i >= 3 ? w[i - 3] : null, c = r[2], d = z.d == null ? null : r[3];
+  return {...z, c, d, c7: r[0], wd: r[1], c21: Math.max(0, c - (r3 ? r3[2] : 0)), cfr: d != null && c ? d / c : null, inc: z.pop ? c / z.pop * 1e5 : null}; });
+const natAt = day => { let r = DATA.cum[0]; for (const x of DATA.cum) if (x[0] <= day) r = x; return r; };
 const last = DATA.cum[DATA.cum.length - 1];
 
 /* ---------- tooltip ---------- */
@@ -231,13 +249,33 @@ const active = zones.filter(z => z.c21 > 0).length;
 const nZS = DATA.map.length;
 let SEL = null;                                   // zone de santé sélectionnée (nom), ou null
 function drawKpis() {
+  let K2 = null;
   const p = $('#prov').value, z = SEL ? byName[SEL] : null, nat = !p && !SEL;
   const zs = SEL ? (z ? [z] : []) : p ? zones.filter(x => x.p === p) : zones;
   const sum = k => zs.reduce((a, x) => a + (x[k] || 0), 0);
   const c = nat ? last[1] : sum('c'), d = nat ? last[2] : sum('d'), r = nat ? last[3] : null, n7 = sum('c7'), n21 = sum('c21');
   const tot = SEL ? 1 : p ? DATA.map.filter(f => f.p === p).length : nZS, tz = zs.filter(x => x.c > 0).length, act = zs.filter(x => x.c21 > 0).length;
   const day = 'jusqu\'au ' + dShort(DATA.updated);
-  const K = SEL ? [   // [valeur, ligne en gras, libellé, couleur]
+  if (WK >= 0) {                                   // semaine épidémiologique choisie
+    const W = wInfo(WK), nr = natAt(W.end), nc = nat ? DATA.weeklyCases[WK][1] : sum('c7'), nd = nat ? DATA.weeklyDeaths[WK][1] : sum('wd');
+    const cc = nat ? nr[1] : c, cd = nat ? nr[2] : d, wz = zs.filter(x => x.c7 > 0).length, rg = W.rng + (W.cur ? ' (en cours)' : '');
+    K2 = SEL ? [
+      [fmt(nc), rg, 'Nouveaux cas, ' + W.se, 'var(--app-mar)'],
+      [fmt(nd), rg, 'Nouveaux décès, ' + W.se, 'var(--c-red)'],
+      [fmt(cc), 'cumul au ' + dShort(W.end), 'Cas confirmés', 'var(--app-mar)'],
+      [fmt(cd), cc ? pct(cd / cc) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
+      [fmt(n21), 'sur 21 jours au ' + dShort(W.end), 'Cas, 21 jours', 'var(--c-or)'],
+      [z && z.inc != null ? Math.round(z.inc).toLocaleString('fr-FR') : '—', z && z.pop ? fmt(z.pop) + ' habitants' : 'population inconnue', 'Cas pour 100 000 habitants', 'var(--app-mar)'],
+    ] : [
+      [fmt(nc), rg, 'Nouveaux cas, ' + W.se, 'var(--app-mar)'],
+      [fmt(nd), rg, 'Nouveaux décès, ' + W.se, 'var(--c-red)'],
+      [fmt(cc), 'cumul au ' + dShort(W.end), 'Cas confirmés', 'var(--app-mar)'],
+      [fmt(cd), cc ? pct(cd / cc) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
+      [fmt(wz) + '/' + fmt(tot), pct(wz / Math.max(1, tot)), 'Zones avec des cas, ' + W.se, 'var(--c-or)'],
+      [fmt(act), tz ? pct(act / tz) + ' des zones touchées' : '—', 'Zones avec des cas sur 21 jours', 'var(--c-or)'],
+    ];
+  }
+  const K = K2 || (SEL ? [   // [valeur, ligne en gras, libellé, couleur]
     [fmt(c), 'cumul au ' + dShort(DATA.updated), 'Cas confirmés', 'var(--app-mar)'],
     [fmt(d), c ? pct(d / c) + ' de létalité' : '—', 'Décès confirmés', 'var(--c-red)'],
     [fmt(n7), day, 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
@@ -251,9 +289,9 @@ function drawKpis() {
     [fmt(n7), day, 'Nouveaux cas, 7 derniers jours', 'var(--c-or)'],
     [fmt(tz) + '/' + fmt(tot), pct(tz / Math.max(1, tot)), 'Zones de santé touchées', 'var(--app-mar)'],
     [fmt(act), tz ? pct(act / tz) + ' des zones touchées' : '—', 'Zones avec des cas sur 21 jours', 'var(--c-or)'],
-  ];
+  ]);
   $('#kpis').innerHTML = K.map(k => `<div class="k" style="border-top-color:${k[3]}"><b style="color:${k[3]}">${k[0]}</b><em>${k[1]}</em><span>${k[2]}</span></div>`).join('');
-  $('#ksc').textContent = 'Périmètre : ' + (SEL ? 'zone de santé de ' + SEL + (z ? ' (' + z.p + ')' : '') : p ? 'province de ' + p : 'République démocratique du Congo') + (SEL || p ? ' · cliquez de nouveau sur la zone ou sur « Vue d\'ensemble » pour revenir' : ' · cliquez sur une zone de santé de la carte pour la sélectionner');
+  $('#ksc').textContent = (WK >= 0 ? 'Semaine : ' + wInfo(WK).lab + ' · ' : '') + 'Périmètre : ' + (SEL ? 'zone de santé de ' + SEL + (z ? ' (' + z.p + ')' : '') : p ? 'province de ' + p : 'République démocratique du Congo') + (SEL || p ? ' · cliquez de nouveau sur la zone ou sur « Vue d\'ensemble » pour revenir' : ' · cliquez sur une zone de santé de la carte pour la sélectionner');
   window.EPI_K = K;
 }
 
@@ -297,8 +335,8 @@ for (const id of ['#prov', '#prov2']) $(id).innerHTML = '<option value="">Toutes
   (id === '#prov' ? '<optgroup label="Sans cas confirmé">' + provinces.filter(p => !affectedProv.includes(p)).map(p => `<option>${p}</option>`).join('') + '</optgroup>' : '');
 
 let metric = 'c', vb = null;
-const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], c21: [1, 5, 10, 25, 50, 100, 200], d: [1, 5, 25, 50, 100, 250, 500]};
-const LABEL = {c: 'cas cumulés', c21: 'cas sur 21 jours', d: 'décès cumulés'};
+const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], c21: [1, 5, 10, 25, 50, 100, 200], d: [1, 5, 25, 50, 100, 250, 500], c7: [1, 5, 10, 25, 50, 100, 200]};
+const LABEL = {c: 'cas cumulés', c21: 'cas sur 21 jours', d: 'décès cumulés', c7: 'cas de la semaine'};
 const colorFor = v => { if (!v) return 'var(--empty)'; const b = BINS[metric]; let i = 0; while (i < b.length - 1 && v >= b[i + 1]) i++; return `var(--s${i + 1})`; };
 function paintMap() {
   gMap.parentNode.appendChild(gProv);
@@ -333,9 +371,9 @@ function fitProv() {
 shapes.forEach(s => {
   s.el.addEventListener('pointermove', ev => {
     const z = byName[s.n];
-    showTip(ev, s.n + ' <span style="color:var(--text-muted);font-weight:400">· ' + s.p + '</span>', z ? [
+    showTip(ev, s.n + ' <span style="color:var(--text-muted);font-weight:400">· ' + s.p + '</span>', z ? (WK >= 0 ? [['Cas, ' + wInfo(WK).se, fmt(z.c7)], ['Décès, ' + wInfo(WK).se, fmt(z.wd)]] : []).concat([
       ['Cas cumulés', fmt(z.c)], ['Cas, 21 derniers jours', fmt(z.c21)], ['Décès cumulés', fmt(z.d)], ['Létalité', pct(z.cfr)], ['Premier cas', dShort(z.first)]
-    ].concat([['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]) : [['Cas confirmés', '0'], ['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]);
+    ]).concat([['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]) : [['Cas confirmés', '0'], ['', SEL === s.n ? 'cliquez pour désélectionner' : 'cliquez pour sélectionner']]);
   });
   s.el.addEventListener('pointerleave', hideTip);
 });
@@ -385,20 +423,20 @@ function barChart(svgEl, series, varColor, label) {
     const tx = el('text', {x: m.l - 6, y: y(t) + 4, 'text-anchor': 'end'}, svgEl); tx.textContent = fmt(t); });
   series.forEach((d, i) => {
     const x = m.l + i * bw, h = y(0) - y(d[1]), w = Math.max(1, bw - 2), rr = Math.min(4, w / 2, h);
-    const isLast = i === series.length - 1;
+    const isLast = i === series.length - 1, op = WK >= 0 && i !== WK ? .28 : isLast ? .45 : 1;
     const path = h > 0 ? `M${x + 1} ${y(0)}V${y(d[1]) + rr}Q${x + 1} ${y(d[1])} ${x + 1 + rr} ${y(d[1])}H${x + 1 + w - rr}Q${x + 1 + w} ${y(d[1])} ${x + 1 + w} ${y(d[1]) + rr}V${y(0)}Z` : '';
-    const bar = el('path', {d: path, fill: varColor, opacity: isLast ? .45 : 1}, svgEl);
+    const bar = el('path', {d: path, fill: varColor, opacity: op}, svgEl);
     if (i % Math.ceil(series.length / 7) === 0) { const tx = el('text', {x: x + bw / 2, y: H - 8, 'text-anchor': 'middle'}, svgEl); tx.textContent = dShort(d[0]); }
     const hit = el('rect', {x, y: m.t, width: bw, height: H - m.t - m.b, class: 'hit'}, svgEl);
     hit.addEventListener('pointermove', ev => { bar.setAttribute('opacity', .75);
       const end = new Date(d[0]); end.setDate(end.getDate() + 6);
-      showTip(ev, 'Semaine du ' + dShort(d[0]), [[label, fmt(d[1])]].concat(isLast ? [['', 'semaine incomplète']] : [])); });
-    hit.addEventListener('pointerleave', () => { bar.setAttribute('opacity', isLast ? .45 : 1); hideTip(); });
+      showTip(ev, wInfo(i).se + ' · semaine du ' + dShort(d[0]), [[label, fmt(d[1])]].concat(isLast ? [['', 'semaine incomplète']] : [])); });
+    hit.addEventListener('pointerleave', () => { bar.setAttribute('opacity', op); hideTip(); });
   });
 }
 function lineChart(svgEl, rows) {
   svgEl.innerHTML = '';
-  const W = Math.max(320, svgEl.clientWidth || 1000), H = 260, m = {l: 54, r: 70, t: 12, b: 26};
+  const W = Math.max(320, svgEl.clientWidth || 1000), Wd = W, H = 260, m = {l: 54, r: 70, t: 12, b: 26};
   svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
   const t0 = Date.parse(rows[0][0]), t1 = Date.parse(rows[rows.length - 1][0]);
   const max = Math.max(...rows.map(r => r[1])), step = Math.pow(10, Math.floor(Math.log10(max))) / 2, nice = Math.ceil(max / step) * step;
@@ -408,6 +446,9 @@ function lineChart(svgEl, rows) {
   for (let d = new Date(rows[0][0].slice(0, 8) + '01'); d <= new Date(t1); d.setMonth(d.getMonth() + 1)) {
     const s = d.toISOString().slice(0, 10); if (Date.parse(s) < t0) continue;
     const tx = el('text', {x: x(s), y: H - 8, 'text-anchor': 'middle'}, svgEl); tx.textContent = MOIS[d.getMonth()]; }
+  if (WK >= 0) { const W = wInfo(WK), a = Math.max(t0, Date.parse(W.m)), b = Math.min(t1, Date.parse(W.s));
+    const X = v => m.l + (Wd - m.l - m.r) * (v - t0) / (t1 - t0); el('rect', {x: X(a), y: m.t, width: Math.max(3, X(b) - X(a)), height: H - m.t - m.b, fill: 'var(--series-1)', opacity: .14}, svgEl);
+    const tw = el('text', {x: X(a) - 4, y: m.t + 12, 'text-anchor': 'end', style: 'fill:var(--text-secondary);font-weight:600'}, svgEl); tw.textContent = W.se; }
   el('path', {d: rows.map((r, i) => (i ? 'L' : 'M') + x(r[0]).toFixed(1) + ' ' + y(r[1]).toFixed(1)).join(''), fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 2, 'stroke-linejoin': 'round'}, svgEl);
   const lr = rows[rows.length - 1];
   el('circle', {cx: x(lr[0]), cy: y(lr[1]), r: 4, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2}, svgEl);
@@ -434,7 +475,7 @@ function drawCharts() {
 let sortK = 'c', sortDir = -1;
 function drawTable() {
   const q = $('#q').value.trim().toLowerCase(), p = $('#prov2').value;
-  const rows = zones.filter(z => (!p || z.p === p) && (!q || (z.z + ' ' + z.p).toLowerCase().includes(q)))
+  const rows = zones.filter(z => z.c > 0 && (!p || z.p === p) && (!q || (z.z + ' ' + z.p).toLowerCase().includes(q)))
     .sort((a, b) => { const A = a[sortK], B = b[sortK]; if (A == null) return 1; if (B == null) return -1;
       return (typeof A === 'string' ? A.localeCompare(B, 'fr') : A - B) * sortDir; });
   $('#tbl tbody').innerHTML = rows.map(z => `<tr><td>${z.z}</td><td>${z.p}</td><td>${fmt(z.c)}</td><td>${fmt(z.c7)}</td><td>${fmt(z.c21)}</td><td>${fmt(z.d)}</td><td>${pct(z.cfr)}</td><td>${z.inc == null ? '—' : Math.round(z.inc).toLocaleString('fr-FR')}</td><td>${dShort(z.first)}</td></tr>`).join('')
@@ -445,12 +486,37 @@ document.querySelectorAll('#tbl th').forEach(th => th.addEventListener('click', 
   if (sortK === th.dataset.k) sortDir *= -1; else { sortK = th.dataset.k; sortDir = ['z', 'p', 'first'].includes(sortK) ? 1 : -1; } drawTable(); }));
 $('#q').addEventListener('input', drawTable); $('#prov2').addEventListener('change', drawTable);
 
+/* ---------- application du filtre des semaines ---------- */
+const MB = {}; $('#metric').querySelectorAll('button').forEach(b => MB[b.dataset.m] = b);
+const TH = {}; document.querySelectorAll('#tbl th').forEach(th => TH[th.dataset.k] = th);
+function setWeek(i) {
+  WK = i; zones = zAt(i); byName = Object.fromEntries(zones.map(z => [z.z, z]));
+  const W = i >= 0 ? wInfo(i) : null;
+  LABEL.c7 = W ? 'cas de la ' + W.se : 'cas de la semaine';
+  LABEL.c = W ? 'cas cumulés au ' + dShort(W.end) : 'cas cumulés';
+  LABEL.c21 = W ? 'cas sur 21 jours au ' + dShort(W.end) : 'cas sur 21 jours';
+  LABEL.d = W ? 'décès cumulés au ' + dShort(W.end) : 'décès cumulés';
+  MB.c7.hidden = !W; MB.c7.textContent = W ? 'Cas de la ' + W.se : 'Cas de la semaine';
+  MB.c21.textContent = W ? 'Cas, 21 jours' : 'Cas, 21 derniers jours';
+  if (W && metric !== 'c7') metric = 'c7'; else if (!W && metric === 'c7') metric = 'c';
+  Object.values(MB).forEach(x => x.setAttribute('aria-pressed', x.dataset.m === metric));
+  TH.c.textContent = W ? 'Cas cumulés (fin ' + W.se + ')' : 'Cas cumulés'; TH.c7.textContent = W ? 'Cas ' + W.se : 'Cas 7 j';
+  TH.d.textContent = W ? 'Décès (fin ' + W.se + ')' : 'Décès';
+  $('#sub').textContent = 'Données au ' + dFr(DATA.updated) + ' · source : INSP / INRB' + (W ? ' · filtre : ' + W.lab : '');
+  fitProv(); drawKpis(); drawTable(); if (location.hash === '#courbes') drawCharts();
+}
+$('#wk').innerHTML = '<option value="-1">Toutes les semaines (au ' + dShort(DATA.updated) + ')</option>' +
+  WEEKS.map((m, i) => i).reverse().map(i => { const W = wInfo(i); return `<option value="${i}">${W.lab}${W.cur ? ' · en cours' : ''}</option>`; }).join('');
+$('#wk').addEventListener('change', e => setWeek(+e.target.value));
+if (!DATA.zones.some(z => z.w)) $('.wkbar').hidden = true;   // ancien epi.json (avant la synchronisation) : filtre masqué
+
 /* ---------- start ---------- */
 route();
 drawTable();
 drawKpis();
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { fitProv(); if (location.hash === '#courbes') drawCharts(); }, 150); });
-window.EPI = {DATA, zones, byName, BINS, LABEL, st: () => ({p: $('#prov').value, sel: SEL}), K: () => window.EPI_K};
+window.EPI = {DATA, get zones() { return zones; }, get byName() { return byName; }, BINS, LABEL, setWeek, weeks: () => WEEKS.map((m, i) => wInfo(i)),
+  st: () => { const W = WK >= 0 ? wInfo(WK) : null; return {p: $('#prov').value, sel: SEL, wk: WK, wl: W ? W.lab : '', se: W ? W.se + '-' + W.y : '', asOf: W ? W.end : DATA.updated}; }, K: () => window.EPI_K};
 sendH();
 })();
 </script>
