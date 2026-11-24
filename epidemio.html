@@ -138,6 +138,13 @@ th[aria-sort="ascending"]::after{content:" ↑"}
     <div class="wkchecks" id="wkchecks"></div>
   </div>
   <div class="fgrp">
+    <span class="flabel">Rapport (filtre en cours)</span>
+    <div style="display:flex;gap:8px">
+      <button class="reset" id="rpptx" type="button" title="Télécharger le rapport PowerPoint">⬇ PowerPoint</button>
+      <button class="reset" id="rpdf" type="button" title="Télécharger le rapport PDF">⬇ PDF</button>
+    </div>
+  </div>
+  <div class="fgrp">
     <span class="flabel" aria-hidden="true">&nbsp;</span>
     <button class="reset" id="reset" type="button">Réinitialiser</button>
   </div>
@@ -221,6 +228,7 @@ const wInfo = i => { const m = WEEKS[i], s = addD(m, 6), [y, n] = isoW(m), end =
   return {se: 'SE' + String(n).padStart(2, '0'), y, m, s, end, cur: s > DATA.updated,
     rng: 'du ' + dShort(m) + ' au ' + dShort(s), lab: 'SE' + String(n).padStart(2, '0') + ' ' + y + ' (' + dShort(m) + ' – ' + dShort(s) + ')'}; };
 const last = DATA.cum[DATA.cum.length - 1];
+const LI = (() => { let i = WEEKS.length - 1; while (i > 0 && WEEKS[i] > DATA.updated) i--; return i; })();   // dernière semaine avec données (pour le rapport)
 // Valeurs d'une zone pour les semaines cochées : somme des nouveaux cas/décès de ces semaines
 // (= cumul sur la période choisie). Toutes les semaines cochées → totaux cumulés officiels (z.c / z.d).
 function zval(z) {
@@ -230,8 +238,10 @@ function zval(z) {
   return {c, d: z.d == null ? null : dd};
 }
 function recompute() {
-  zones = zones0.map(z => { const v = zval(z), c = v.c, d = v.d;
-    return {...z, c, d, cfr: d != null && c ? d / c : null, inc: z.pop ? c / z.pop * 1e5 : null}; });
+  zones = zones0.map(z => { const v = zval(z), c = v.c, d = v.d, w = z.w;
+    return {...z, c, d, cfr: d != null && c ? d / c : null, inc: z.pop ? c / z.pop * 1e5 : null,
+      c7: (HASW && w && w[LI]) ? (w[LI][0] || 0) : 0,                                   // dernière semaine (rapport)
+      c21: (HASW && w && w.length) ? Math.max(0, (w[LI] ? w[LI][2] : z.c) - (w[LI - 3] ? w[LI - 3][2] : 0)) : 0}; });
   byName = Object.fromEntries(zones.map(z => [z.z, z]));
 }
 // Libellé de la période sélectionnée (pour les titres et l'export).
@@ -325,8 +335,9 @@ $('#prov').innerHTML = '<option value="">Toutes les provinces</option>' +
   '<optgroup label="Sans cas confirmé">' + provinces.filter(p => !affectedProv.includes(p)).map(p => `<option>${p}</option>`).join('') + '</optgroup>';
 
 let metric = 'c', vb = null;
-const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], d: [1, 5, 25, 50, 100, 250, 500]};
-const LABEL = {c: 'cas cumulés', d: 'décès cumulés'};
+// La page n'utilise que c et d ; c7/c21 sont conservés pour le rapport PDF/PPTX généré par l'application principale (index.html).
+const BINS = {c: [1, 10, 50, 100, 250, 500, 1000], c21: [1, 5, 10, 25, 50, 100, 200], d: [1, 5, 25, 50, 100, 250, 500], c7: [1, 5, 10, 25, 50, 100, 200]};
+const LABEL = {c: 'cas cumulés', c21: 'cas sur 21 jours', d: 'décès cumulés', c7: 'cas de la semaine'};
 const colorFor = v => { if (!v) return 'var(--empty)'; const b = BINS[metric]; let i = 0; while (i < b.length - 1 && v >= b[i + 1]) i++; return `var(--s${i + 1})`; };
 function paintMap() {
   gMap.parentNode.appendChild(gProv);
@@ -476,6 +487,100 @@ $('#dlxlsx').addEventListener('click', async () => {
   btn.textContent = old;
 });
 
+/* ---------- rapport PPTX / PDF : même design que les rapports Sitreps / Évaluations (moteur partagé window.parent.EVX) ----------
+   Reflète le filtre en cours. Diapositives : couverture, chiffres clés, carte+légende des cas cumulés,
+   carte+légende des décès cumulés, puis le tableau des zones (réparti sur plusieurs diapositives selon le nombre de lignes). */
+function rEVX() { try { return window.parent && window.parent.EVX; } catch (e) { return null; } }
+const rMOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const rdFr = s => { const [y, m, d] = String(s).split('-').map(Number); return d + ' ' + rMOIS[m - 1] + ' ' + y; };
+const rPAL = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#0d366b'], rEMPTY = '#ecebe7';
+const rCOL = c => { const X = rEVX(); return /mar/.test(c) ? X.MR : /red/.test(c) ? X.CO[0] : /-or/.test(c) ? X.CO[1] : /gr/.test(c) ? X.CO[2] : X.NV; };
+const rnf = n => n == null ? '—' : Number(n).toLocaleString('fr-FR');
+const rslug = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+function rHead(X, title, sub, scope, upd) {
+  const [a, g] = X.nc(), F2 = 'Calibri,Arial,sans-serif'; g.fillStyle = '#f7f3f1'; g.fillRect(0, 0, 1280, 720); g.fillStyle = X.NV; g.fillRect(0, 0, 1280, 119);
+  X.ct(g, 'ÉPIDÉMIOLOGIE · 17ÈME ÉPIDÉMIE DE MVE · RDC', 48, 13, '700 32px ' + F2, '#ffffff'); X.ct(g, (scope + ' · Données au ' + rdFr(upd)).slice(0, 150), 48, 56, '16px ' + F2, '#c9d2e6');
+  g.fillStyle = '#e6e0dc'; g.fillRect(36, 82, 1208, 624); g.fillStyle = '#ffffff'; g.fillRect(36, 83, 1208, 624); g.fillStyle = X.NV; g.fillRect(36, 83, 1208, 36);
+  X.ct(g, title.toUpperCase().slice(0, 92), 56, 88, '700 22px ' + F2, '#ffffff'); if (sub) X.ct(g, sub.slice(0, 170), 56, 126, '14px ' + F2, '#6b7385');
+  X.ct(g, 'Source : rapports de situation MVE INSP / INRB (dépôt public INRB-UMIE/BDBV2026-Data) · Généré le ' + new Date().toLocaleDateString('fr-FR'), 48, 708, '12px ' + F2, '#6b7385'); g.translate(8, 24); return [a, g];
+}
+function rMap(X, E, st, m, title, scope) {
+  const D = E.DATA, B = E.BINS[m], FN = X.FN, K = Math.cos(-2 * Math.PI / 180), P = ([lo, la]) => [lo * K, -la];
+  const rings = (t, g) => (t === 'Polygon' ? [g] : g).map(poly => poly[0].map(P));
+  const feats = D.map.filter(f => !st.p || f.p === st.p), provs = (D.prov || []).filter(f => !st.p || f.p === st.p);
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const R = feats.map(f => { const r = rings(f.t, f.g); r.forEach(q => q.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); })); return [f, r]; });
+  const [a, g] = rHead(X, title, (st.p ? 'Province ' + st.p + (st.sel ? ' — zone de santé ' + st.sel + ' (contour épais)' : '') : 'Ensemble des 519 zones de santé') + ' · ' + E.LABEL[m] + ' par zone de santé.', scope, st.asOf || D.updated);
+  const bx = 48, by = 140, bw = 820, bh = 520, sc = Math.min(bw / (x1 - x0), bh / (y1 - y0)), ox = bx + (bw - (x1 - x0) * sc) / 2, oy = by + (bh - (y1 - y0) * sc) / 2, T = ([x, y]) => [ox + (x - x0) * sc, oy + (y - y0) * sc];
+  const col = v => { if (!v) return rEMPTY; let i = 0; while (i < B.length - 1 && v >= B[i + 1]) i++; return rPAL[i]; };
+  R.forEach(([f, r]) => { const z = E.byName[f.n]; r.forEach(q => g.poly(q.map(T), col(z ? z[m] : 0), '#ffffff', .5)); });
+  provs.forEach(f => rings(f.t, f.g).forEach(q => g.poly(q.map(T), null, '#1b2a4a', .8)));
+  if (st.sel) { const f = feats.find(f => f.n === st.sel); if (f) rings(f.t, f.g).forEach(q => g.poly(q.map(T), null, '#1b2a4a', 2.4)); }
+  const lx = 900; X.ct(g, 'LÉGENDE · ' + E.LABEL[m].toUpperCase(), lx, 140, '700 15px ' + FN, X.NV);
+  [[rEMPTY, '0']].concat(B.map((v, i) => [rPAL[i], i === B.length - 1 ? '≥ ' + rnf(v) : rnf(v) + (B[i + 1] - 1 > v ? ' – ' + rnf(B[i + 1] - 1) : '')])).forEach(([c, t], i) => { const yy = 168 + i * 24; g.fillStyle = '#d8d6d0'; g.fillRect(lx - 1, yy - 1, 30, 16); g.fillStyle = c; g.fillRect(lx, yy, 28, 14); X.ct(g, t, lx + 40, yy - 2, '14px ' + FN, '#1d2433'); });
+  g.fillStyle = '#ffffff'; g.fillRect(lx, 368, 28, 14); g.poly([[lx, 368], [lx + 28, 368], [lx + 28, 382], [lx, 382]], null, '#1b2a4a', 1.2); X.ct(g, 'Contour : province', lx + 40, 366, '14px ' + FN, '#1d2433');
+  const top = E.zones.filter(z => (!st.p || z.p === st.p) && z[m] > 0).sort((u, v) => v[m] - u[m]).slice(0, 10), mx = top.length ? top[0][m] : 1;
+  X.ct(g, 'ZONES LES PLUS TOUCHÉES', lx, 402, '700 15px ' + FN, X.NV);
+  if (!top.length) X.ct(g, 'Aucune zone concernée.', lx, 428, '14px ' + FN, '#6b7385');
+  top.forEach((z, i) => { const yy = 428 + i * 23; X.ct(g, (z.z + ' · ' + z.p).slice(0, 30), lx, yy, (z.z === st.sel ? '700 ' : '') + '13px ' + FN, '#1d2433'); X.ct(g, rnf(z[m]), lx + 330, yy, '700 13px ' + FN, '#1d2433', 'right'); X.hb(g, lx, yy + 17, 330, 3, z[m] / mx, '#3987e5'); });
+  return a;
+}
+function rTable(X, E, st, scope, AS) {
+  const FN = X.FN, out = [], rows = E.zones.filter(z => (!st.p || z.p === st.p) && z.c > 0).sort((a, b) => b.c - a.c);
+  const C = [['Zone de santé', 48, 'left'], ['Province', 300, 'left'], ['Cas cum.', 628, 'right'], ['Décès cum.', 760, 'right'], ['Létalité', 880, 'right'], ['Cas/100 000', 1030, 'right'], ['Premier cas', 1050, 'left']];
+  if (!rows.length) { const [a] = rHead(X, 'Zones de santé touchées', 'Aucune zone ne correspond au filtre.', scope, AS); return [a]; }
+  const PER = 16, np = Math.ceil(rows.length / PER);
+  for (let p = 0; p < np; p++) {
+    const part = rows.slice(p * PER, (p + 1) * PER);
+    const [a, g] = rHead(X, 'Zones de santé touchées' + (np > 1 ? ' (' + (p + 1) + '/' + np + ')' : ''), rows.length + ' zone' + (rows.length > 1 ? 's' : '') + ' · cas et décès cumulés' + (st.p ? ' · ' + st.p : ''), scope, AS);
+    const hy = 150; g.fillStyle = '#eef1f6'; g.fillRect(40, hy - 6, 1168, 30);
+    C.forEach(([t, x, al]) => X.ct(g, t, x, hy, '700 13px ' + FN, X.NV, al));
+    part.forEach((z, i) => {
+      const ry = hy + 34 + i * 30; if (i % 2) { g.fillStyle = '#f7f5f2'; g.fillRect(40, ry - 8, 1168, 30); }
+      X.ct(g, z.z.slice(0, 30), 48, ry, '14px ' + FN, '#1d2433');
+      X.ct(g, z.p.slice(0, 22), 300, ry, '13px ' + FN, '#6b7385');
+      X.ct(g, rnf(z.c), 628, ry, '700 14px ' + FN, '#1d2433', 'right');
+      X.ct(g, rnf(z.d), 760, ry, '14px ' + FN, '#b4232a', 'right');
+      X.ct(g, z.cfr == null ? '—' : (z.cfr * 100).toFixed(1).replace('.', ',') + ' %', 880, ry, '13px ' + FN, '#1d2433', 'right');
+      X.ct(g, z.inc == null ? '—' : rnf(Math.round(z.inc)), 1030, ry, '13px ' + FN, '#1d2433', 'right');
+      X.ct(g, z.first ? rdFr(z.first) : '—', 1050, ry, '13px ' + FN, '#6b7385');
+    });
+    out.push(a);
+  }
+  return out;
+}
+function rSlides(E, st) {
+  const X = rEVX(), FN = X.FN, D = E.DATA, K = E.K(), L = [];
+  const scope = (st.sel ? 'Zone de santé : ' + st.sel + ' (' + st.p + ')' : st.p ? 'Province : ' + st.p : 'Pays : RD Congo'), AS = st.asOf || D.updated;
+  let a, g;
+  [a, g] = X.nc(); g.fillStyle = '#0b3c4a'; g.fillRect(0, 0, 1280, 720); g.image(X.EMB, 260, 239, 517, 25, 194, 178);
+  X.ct(g, 'TASK FORCE PRESIDENTIELLE EBOLA 17', 616, 209, '700 24px Georgia,serif', '#ffffff', 'center'); X.ct(g, 'MINISTERE DE LA SANTE PUBLIQUE, HYGIENE ET PREVOYANCE SOCIALE', 616, 244, '700 18px Georgia,serif', '#dc8b5b', 'center'); X.ct(g, 'SYSTÈME DE GESTION DE L’INCIDENT', 616, 274, '700 24px Georgia,serif', '#64bee6', 'center');
+  [['#eb0000', 290, 216], ['#ffda00', 506, 216], ['#00aef0', 721, 219]].forEach(([c, x, w]) => { g.fillStyle = c; g.fillRect(x, 331, w, 5); });
+  X.ct(g, 'Rapport de la situation', 632, 362, '700 53px Cambria,serif', '#ffffff'); X.ct(g, 'épidémiologique', 632, 424, '700 53px Cambria,serif', '#ffffff');
+  X.ct(g, '17ème épidémie de maladie à virus Ebola (MVE) –', 634, 520, '24px Calibri,sans-serif', '#e8f1f2'); X.ct(g, 'République démocratique du Congo', 634, 550, '24px Calibri,sans-serif', '#e8f1f2');
+  X.ct(g, scope.slice(0, 95) + ' · Données au ' + rdFr(AS), 642, 612, '16px Calibri,sans-serif', '#c9d2e6'); X.ct(g, 'Source : rapports de situation MVE INSP / INRB', 642, 636, '16px Calibri,sans-serif', '#c9d2e6'); X.ct(g, 'Généré le ' + new Date().toLocaleDateString('fr-FR'), 642, 662, '18px Calibri,sans-serif', '#c9d2e6');
+  L.push(a);
+  [a, g] = rHead(X, 'Chiffres clés', scope + '.', scope, AS);
+  K.forEach(([v, em, l, c], i) => { const x = 48 + (i % 3) * 392, y = 150 + Math.floor(i / 3) * 240, co = rCOL(c); X.rr(g, x, y, 374, 220, '#faf7f5'); g.fillStyle = co; g.fillRect(x, y, 374, 8); X.ct(g, String(v), x + 24, y + 30, '700 60px ' + FN, co); X.ct(g, String(em).slice(0, 34), x + 24, y + 112, '700 24px ' + FN, '#1d2433'); X.ct(g, String(l).slice(0, 40), x + 24, y + 152, '19px ' + FN, '#6b7385'); });
+  L.push(a);
+  L.push(rMap(X, E, st, 'c', 'Cas confirmés cumulés par zone de santé', scope));
+  L.push(rMap(X, E, st, 'd', 'Décès confirmés cumulés par zone de santé', scope));
+  rTable(X, E, st, scope, AS).forEach(s => L.push(s));
+  return L;
+}
+async function epiReport(fmt) {
+  const X = rEVX(), btn = fmt === 'pptx' ? $('#rpptx') : $('#rpdf'), old = btn.textContent;
+  if (!X || !X.mkPptx) { btn.textContent = 'Indisponible ici'; setTimeout(() => btn.textContent = old, 2600); return; }
+  try {
+    btn.textContent = '…'; await new Promise(r => setTimeout(r, 30));
+    const st = window.EPI.st(), L = rSlides(window.EPI, st);
+    const nm = ['Epidemiologie-MVE-RDC', rslug(st.sel || st.p || 'RD-Congo'), rslug(st.period || ''), (st.asOf || DATA.updated)].filter(Boolean).join('_') + '.' + fmt;
+    X.saveBlob(fmt === 'pptx' ? X.mkPptx(L) : X.mkPdf(L), nm);
+    btn.textContent = '✓ Prêt'; setTimeout(() => btn.textContent = old, 1600);
+  } catch (e) { console.error(e); btn.textContent = 'Échec'; setTimeout(() => btn.textContent = old, 2600); }
+}
+if ($('#rpptx')) $('#rpptx').addEventListener('click', () => epiReport('pptx'));
+if ($('#rpdf')) $('#rpdf').addEventListener('click', () => epiReport('pdf'));
+
 /* ---------- start ---------- */
 buildWeekChecks();
 recompute();
@@ -488,7 +593,8 @@ window.EPI = {DATA, get zones() { return zones; }, get byName() { return byName;
   weeks: () => WEEKS.map((m, i) => wInfo(i)),
   setWeeks: (arr) => { checked = new Set(arr); document.querySelectorAll('#wkchecks .wkc').forEach(c => c.checked = checked.has(+c.value)); const a = $('#wkall'); if (a) a.checked = allW(); apply(); },
   setProv: (p) => { $('#prov').value = p || ''; SEL = null; redraw(); },
-  st: () => ({p: $('#prov').value, sel: SEL, weeks: [...checked].sort((a, b) => a - b), period: periodLabel().short, metric}), K: () => window.EPI_K};
+  st: () => ({p: $('#prov').value, sel: SEL, weeks: [...checked].sort((a, b) => a - b), period: periodLabel().short, metric,
+    wl: '', se: periodLabel().file, asOf: DATA.updated}), K: () => window.EPI_K};   // wl/se/asOf : compat. rapport index.html
 sendH();
 })();
 </script>
