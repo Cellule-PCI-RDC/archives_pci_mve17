@@ -1,0 +1,34 @@
+name: Synchroniser les PPL infectés (formulaire Kobo PPL)
+on:
+  schedule: [{cron: "23 * * * *"}]   # toutes les heures
+  workflow_dispatch:
+permissions: {contents: write}
+concurrency: {group: synchro-ppl, cancel-in-progress: false}   # file d'attente propre à ce workflow
+jobs:
+  ppl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15   # un run bloqué ne retient jamais les suivants
+    env:
+      KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+      ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
+      ACCES_CODE: ${{ secrets.ACCES_CODE }}
+      KOBO_SERVER: ${{ vars.KOBO_SERVER }}
+      KOBO_UID_PPL: ${{ vars.KOBO_UID_PPL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install requests cryptography
+      - name: Lire Kobo, anonymiser et chiffrer
+        run: python sync_ppl.py
+      - name: Publier
+        run: |
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          [ -e ppl.enc.json ] || exit 0
+          git add ppl.enc.json
+          git commit -m "Synchronisation des PPL" || exit 0
+          for i in 1 2 3 4 5; do   # un autre workflow a pu publier entre-temps : on récupère puis on réessaie
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q && exit 0
+            sleep $((i*7))
+          done
+          echo "Publication impossible après 5 essais"; exit 1

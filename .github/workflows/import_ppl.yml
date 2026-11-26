@@ -1,0 +1,32 @@
+name: Importer une fois les PPL du classeur Excel dans Kobo
+on:
+  workflow_dispatch:   # lancement manuel uniquement
+permissions: {contents: write}
+concurrency: {group: import-ppl, cancel-in-progress: false}
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+      PPL_IMPORT_KEY: ${{ secrets.PPL_IMPORT_KEY }}
+      KOBO_SERVER: ${{ vars.KOBO_SERVER }}
+      KOBO_UID_PPL: ${{ vars.KOBO_UID_PPL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install requests cryptography
+      - name: Envoyer les fiches dans Kobo
+        run: python import_ppl.py
+      - name: Retirer le fichier d'import du dépôt (import terminé)
+        run: |
+          [ -e .import_ok ] || exit 0
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          git rm -q --ignore-unmatch ppl_import.enc
+          git commit -m "Import PPL terminé : fichier d'import retiré" || exit 0
+          for i in 1 2 3 4 5; do
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q && exit 0
+            sleep $((i*7))
+          done
+          exit 1
