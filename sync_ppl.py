@@ -4,8 +4,8 @@ Synchronisation des PPL infectés (formulaire Kobo « Base PPL infectés – MVE
 Les noms, ID EPID, N° de base centrale et observations ne quittent JAMAIS Kobo : seules les variables
 utiles aux visuels sont publiées, puis chiffrées (AES-256-GCM, clé dérivée du code d'accès).
 
-Variables : KOBO_TOKEN (secret), ACCESS_CODE (secret), KOBO_UID_PPL (variable : UID du formulaire PPL),
-KOBO_SERVER (facultatif, https://kf.kobotoolbox.org par défaut).
+Variables : KOBO_TOKEN (secret), ACCESS_CODE (secret) ; KOBO_UID_PPL et KOBO_SERVER facultatifs
+(le formulaire est retrouvé grâce à son lien Enketo ZTKeReRt).
 
 Test local à partir du classeur Excel :  python sync_ppl.py --xlsx BDD_PPL.xlsx
 """
@@ -94,6 +94,34 @@ def build(recs):
                      "categorie", "investigation", "etat", "date_etat", "doublon"], "rows": rows}
 
 
+ENKETO_PPL = "ZTKeReRt"   # lien du formulaire PPL : https://ee.kobotoolbox.org/x/ZTKeReRt
+
+
+def find_uid(srv, h):
+    """UID du formulaire PPL : variable KOBO_UID_PPL si elle existe, sinon recherche du formulaire
+    dont le lien Enketo est ENKETO_PPL (ou la variable KOBO_ENKETO_PPL) parmi les projets du compte."""
+    import requests
+    uid = (os.environ.get("KOBO_UID_PPL") or "").strip()
+    if uid:
+        return uid
+    ek = (os.environ.get("KOBO_ENKETO_PPL") or ENKETO_PPL).strip().rstrip("/").split("/")[-1]
+    url, seen = f"{srv}/api/v2/assets/", []
+    params = {"q": "asset_type:survey", "limit": 200, "format": "json"}
+    while url:
+        r = requests.get(url, headers=h, params=params, timeout=60); r.raise_for_status(); j = r.json(); params = None
+        seen += j.get("results", []); url = j.get("next")
+    for a in seen:
+        if ek in json.dumps(a.get("deployment__links") or {}):
+            return a["uid"]
+    for a in seen:                                        # liens absents de la liste : on lit chaque projet déployé
+        if a.get("has_deployment") or a.get("deployment__active"):
+            d = requests.get(f"{srv}/api/v2/assets/{a['uid']}/", headers=h, params={"format": "json"}, timeout=60)
+            if d.ok and ek in json.dumps(d.json().get("deployment__links") or {}):
+                return a["uid"]
+    sys.exit(f"Formulaire au lien Enketo « {ek} » introuvable avec ce KOBO_TOKEN : vérifiez qu'il est déployé "
+             f"et qu'il appartient (ou est partagé) au compte du jeton. Projets lus : {len(seen)}.")
+
+
 def nice(s):
     s = re.sub(r"\s+", " ", str(s or "")).strip()
     return s.upper() if s else ""
@@ -102,13 +130,11 @@ def nice(s):
 # ---------------------------------------------------------------- source 1 : Kobo
 def from_kobo():
     import requests
-    uid = (os.environ.get("KOBO_UID_PPL") or "").strip()
-    if not uid:
-        print("Variable KOBO_UID_PPL absente : formulaire PPL non encore configuré, rien à faire."); return None
     if not os.environ.get("KOBO_TOKEN"):
         sys.exit("KOBO_TOKEN absent (secret du dépôt).")
     srv = (os.environ.get("KOBO_SERVER") or "https://kf.kobotoolbox.org").rstrip("/")
-    h = {"Authorization": "Token " + os.environ["KOBO_TOKEN"]}
+    h = {"Authorization": "Token " + os.environ["KOBO_TOKEN"].strip()}
+    uid = find_uid(srv, h)
     a = requests.get(f"{srv}/api/v2/assets/{uid}/", headers=h, timeout=60)
     a.raise_for_status()
     lab = {}
