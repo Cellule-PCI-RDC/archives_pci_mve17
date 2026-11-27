@@ -4,7 +4,8 @@ Import unique des PPL du classeur Excel (11/11/2026) dans le formulaire Kobo PPL
 ppl_import.enc contient les fiches (noms compris) chiffrées avec une clé aléatoire : le fichier est
 illisible sans le secret PPL_IMPORT_KEY. Après un import réussi, le workflow supprime ce fichier du dépôt.
 
-Variables : KOBO_TOKEN, PPL_IMPORT_KEY (secrets), KOBO_UID_PPL (variable), KOBO_SERVER (facultatif).
+Variables : KOBO_TOKEN, PPL_IMPORT_KEY (secrets) ; KOBO_UID_PPL et KOBO_SERVER facultatifs
+(le formulaire est retrouvé grâce à son lien Enketo).
 Relancer l'import ne crée pas de doublons : Kobo ignore une fiche strictement identique à une fiche déjà reçue.
 """
 import base64, gzip, io, json, os, sys, time
@@ -13,6 +14,34 @@ import requests
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 SRC = "ppl_import.enc"
+
+
+ENKETO_PPL = "ZTKeReRt"   # lien du formulaire PPL : https://ee.kobotoolbox.org/x/ZTKeReRt
+
+
+def find_uid(srv, h):
+    """UID du formulaire PPL : variable KOBO_UID_PPL si elle existe, sinon recherche du formulaire
+    dont le lien Enketo est ENKETO_PPL (ou la variable KOBO_ENKETO_PPL) parmi les projets du compte."""
+    import requests
+    uid = (os.environ.get("KOBO_UID_PPL") or "").strip()
+    if uid:
+        return uid
+    ek = (os.environ.get("KOBO_ENKETO_PPL") or ENKETO_PPL).strip().rstrip("/").split("/")[-1]
+    url, seen = f"{srv}/api/v2/assets/", []
+    params = {"q": "asset_type:survey", "limit": 200, "format": "json"}
+    while url:
+        r = requests.get(url, headers=h, params=params, timeout=60); r.raise_for_status(); j = r.json(); params = None
+        seen += j.get("results", []); url = j.get("next")
+    for a in seen:
+        if ek in json.dumps(a.get("deployment__links") or {}):
+            return a["uid"]
+    for a in seen:                                        # liens absents de la liste : on lit chaque projet déployé
+        if a.get("has_deployment") or a.get("deployment__active"):
+            d = requests.get(f"{srv}/api/v2/assets/{a['uid']}/", headers=h, params={"format": "json"}, timeout=60)
+            if d.ok and ek in json.dumps(d.json().get("deployment__links") or {}):
+                return a["uid"]
+    sys.exit(f"Formulaire au lien Enketo « {ek} » introuvable avec ce KOBO_TOKEN : vérifiez qu'il est déployé "
+             f"et qu'il appartient (ou est partagé) au compte du jeton. Projets lus : {len(seen)}.")
 
 
 def kc_hosts(srv):
@@ -24,7 +53,7 @@ def kc_hosts(srv):
 
 
 def main():
-    for k in ("KOBO_TOKEN", "PPL_IMPORT_KEY", "KOBO_UID_PPL"):
+    for k in ("KOBO_TOKEN", "PPL_IMPORT_KEY"):
         if not (os.environ.get(k) or "").strip():
             sys.exit(f"{k} absent : voir les instructions d'installation du formulaire PPL.")
     if not os.path.exists(SRC):
@@ -35,9 +64,21 @@ def main():
     except Exception:
         sys.exit("Clé PPL_IMPORT_KEY incorrecte : recopiez-la exactement (sans espace).")
     srv = (os.environ.get("KOBO_SERVER") or "https://kf.kobotoolbox.org").rstrip("/")
-    uid, h = os.environ["KOBO_UID_PPL"].strip(), {"Authorization": "Token " + os.environ["KOBO_TOKEN"].strip()}
-    a = requests.get(f"{srv}/api/v2/assets/{uid}/", headers=h, timeout=60)
+    h = {"Authorization": "Token " + os.environ["KOBO_TOKEN"].strip()}
+    uid = find_uid(srv, h)
+    a = requests.get(f"{srv}/api/v2/assets/{uid}/", headers=h, params={"format": "json"}, timeout=60)
     a.raise_for_status(); a = a.json()
+    print(f"Formulaire PPL trouvé : {a.get('name', '')} ({uid}), {a.get('deployment__submission_count', '?')} fiche(s) déjà présente(s).")
+    # le formulaire déployé doit être celui fourni (mêmes noms de questions et de groupes)
+    names = {q.get("name") or q.get("$autoname") for q in (a.get("content") or {}).get("survey", [])}
+    need = {k.split("/")[1] for r in recs for k in r if "/" in k} | {"g_id", "g_lieu", "g_suivi"}
+    if names and need - names:
+        sys.exit("Le formulaire déployé ne correspond pas à Formulaire_Kobo_PPL.xlsx : questions absentes "
+                 + ", ".join(sorted(need - names)) + ". Redéployez le formulaire fourni sans renommer les questions.")
+    zones = {c.get("name") for c in (a.get("content") or {}).get("choices", []) if c.get("list_name") == "zones"}
+    bad = sorted({r.get("g_lieu/zone") for r in recs} - zones) if zones else []
+    if bad:
+        sys.exit("Zones de santé absentes de la liste du formulaire : " + ", ".join(bad))
     ver = a.get("deployed_version_id") or a.get("version_id") or ""
     if not a.get("has_deployment", True):
         sys.exit("Le formulaire PPL n'est pas encore déployé dans Kobo : cliquez sur « Déployer » puis relancez.")
