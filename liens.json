@@ -1,0 +1,54 @@
+{
+ "liens": [
+  {
+   "id": "sitreps",
+   "type": "kobo",
+   "titre": "Soumettre votre Sitrep",
+   "formulaire": "Rapport journalier de situation (SITREP) PCI – MVE (17ème épidémie, RDC)",
+   "url": "https://ee.kobotoolbox.org/x/wPbArYUo",
+   "alimente": "Sitreps",
+   "delai": "environ 5 minutes",
+   "fiches": 5
+  },
+  {
+   "id": "evaluations",
+   "type": "kobo",
+   "titre": "Effectuer une Évaluation PCI (EBOD RAT)",
+   "formulaire": "VF Outil d'évaluation PCI des ESS dans le cadre de l'épidémie à la maladie à virus Ebola (MVE) en RDC",
+   "url": "https://ee.kobotoolbox.org/x/kym6EbqI",
+   "alimente": "Évaluations › EBOD RAT",
+   "delai": "quelques heures",
+   "fiches": 4653
+  },
+  {
+   "id": "ppl",
+   "type": "kobo",
+   "titre": "Déclarer ou mettre à jour un PPL infecté",
+   "formulaire": "Base PPL infectés – MVE 17",
+   "url": "https://ee.kobotoolbox.org/x/ZTKeReRt",
+   "alimente": "Évaluations › PPL",
+   "delai": "environ une heure",
+   "fiches": 490
+  },
+  {
+   "id": "documents",
+   "type": "kobo",
+   "titre": "Déposer un document (compte rendu, rapport, plan…)",
+   "formulaire": "Dépôt de documents PCI – MVE 17",
+   "url": "https://ee.kobotoolbox.org/x/eKOJ0CbO",
+   "alimente": "Docs & Liens › Documents",
+   "delai": "environ une heure",
+   "fiches": 2
+  },
+  {
+   "id": "epidemio",
+   "type": "web",
+   "titre": "Données épidémiologiques INSP / INRB (dépôt public)",
+   "url": "https://github.com/INRB-UMIE/BDBV2026-Data",
+   "alimente": "Épidémiologie",
+   "delai": "toutes les 6 heures",
+   "note": "Source publique en lecture seule : rien à saisir."
+  }
+ ],
+ "upd": "2026-11-28T07:48:24"
+}
