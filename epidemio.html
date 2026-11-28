@@ -114,7 +114,7 @@ th[aria-sort="ascending"]::after{content:" ↑"}
 </head>
 <body>
 <div class="wrap">
-<p class="intro">Bienvenue dans l'actualité épidémiologique au cours de la 17ème épidémie de MVE en RDC. Source : rapports de situation MVE de l'Institut National de Santé Publique (INSP) et de l'Institut National de Recherche Biomédicale (INRB), compilés dans le dépôt public <a href="https://github.com/INRB-UMIE/BDBV2026-Data" target="_blank" rel="noopener noreferrer">INRB-UMIE/BDBV2026-Data</a>.</p>
+<p class="intro">Bienvenue dans l'actualité épidémiologique au cours de la 17ème épidémie de MVE en RDC. Source : rapports de situation MVE de l'Institut National de Santé Publique (INSP) et de l'Institut National de Recherche Biomédicale (INRB).</p>
 <header>
   <div>
     <div class="sub" id="sub"></div>
@@ -502,7 +502,7 @@ function rHead(X, title, sub, scope, upd) {
   X.ct(g, 'ÉPIDÉMIOLOGIE · 17ÈME ÉPIDÉMIE DE MVE · RDC', 48, 13, '700 32px ' + F2, '#ffffff'); X.ct(g, (scope + ' · Données au ' + rdFr(upd)).slice(0, 150), 48, 56, '16px ' + F2, '#c9d2e6');
   g.fillStyle = '#e6e0dc'; g.fillRect(36, 82, 1208, 624); g.fillStyle = '#ffffff'; g.fillRect(36, 83, 1208, 624); g.fillStyle = X.NV; g.fillRect(36, 83, 1208, 36);
   X.ct(g, title.toUpperCase().slice(0, 92), 56, 88, '700 22px ' + F2, '#ffffff'); if (sub) X.ct(g, sub.slice(0, 170), 56, 126, '14px ' + F2, '#6b7385');
-  X.ct(g, 'Source : rapports de situation MVE INSP / INRB (dépôt public INRB-UMIE/BDBV2026-Data) · Généré le ' + new Date().toLocaleDateString('fr-FR'), 48, 708, '12px ' + F2, '#6b7385'); g.translate(8, 24); return [a, g];
+  X.ct(g, 'Source : rapports de situation MVE INSP / INRB · Généré le ' + new Date().toLocaleDateString('fr-FR'), 48, 708, '12px ' + F2, '#6b7385'); g.translate(8, 24); return [a, g];
 }
 function rMap(X, E, st, m, title, scope) {
   const D = E.DATA, B = E.BINS[m], FN = X.FN, K = Math.cos(-2 * Math.PI / 180), P = ([lo, la]) => [lo * K, -la];
