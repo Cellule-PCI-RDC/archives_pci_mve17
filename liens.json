@@ -39,16 +39,7 @@
    "alimente": "Docs & Liens › Documents",
    "delai": "environ une heure",
    "fiches": 2
-  },
-  {
-   "id": "epidemio",
-   "type": "web",
-   "titre": "Données épidémiologiques INSP / INRB (dépôt public)",
-   "url": "https://github.com/INRB-UMIE/BDBV2026-Data",
-   "alimente": "Épidémiologie",
-   "delai": "toutes les 6 heures",
-   "note": "Source publique en lecture seule : rien à saisir."
   }
  ],
- "upd": "2026-11-28T07:48:24"
+ "upd": "2026-11-28T08:16:20"
 }
