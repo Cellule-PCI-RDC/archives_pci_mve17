@@ -3,8 +3,9 @@ Liens qui alimentent l'application → liens.json (public : aucun identifiant, a
 
 Chaque formulaire Kobo relié à l'application (variables du dépôt KOBO_UID, KOBO_UID_ESS, KOBO_UID_DOCS,
 KOBO_UID_PPL… et toute nouvelle variable KOBO_UID_xxx) apparaît automatiquement dans
-Docs & Liens › Liens utiles, avec son lien public (Enketo). Une autre source (site, dépôt de données…)
-s'ajoute avec une variable LIEN_xxx de la forme :  Titre | https://adresse | ce qu'elle alimente
+Docs & Liens › Liens utiles, avec son lien public (Enketo). Une autre source (site…) s'ajoute avec une
+variable LIEN_xxx de la forme :  Titre | https://adresse | ce qu'elle alimente
+La source de la page Épidémiologie n'est volontairement jamais publiée ici (confidentialité).
 
 Variables : KOBO_TOKEN (secret), VARS_JSON (toutes les variables du dépôt, fournies par le workflow).
 """
@@ -21,9 +22,6 @@ KNOWN = {
 }
 ORDER = ["sitreps", "evaluations", "ppl", "documents"]
 ENKETO_PPL = "ZTKeReRt"           # formulaire PPL retrouvé par son lien si KOBO_UID_PPL n'est pas défini
-EPI = {"id": "epidemio", "type": "web", "titre": "Données épidémiologiques INSP / INRB (dépôt public)",
-       "url": "https://github.com/INRB-UMIE/BDBV2026-Data", "alimente": "Épidémiologie", "delai": "toutes les 6 heures",
-       "note": "Source publique en lecture seule : rien à saisir."}
 
 
 def kobo(uid, h):
@@ -91,7 +89,6 @@ def main():
                     "url": url, "alimente": alim, "delai": delai, "fiches": a.get("deployment__submission_count")})
         print(f"{var} → {out[-1]['titre']} : {url}")
     out.sort(key=lambda x: (ORDER.index(x["id"]) if x["id"] in ORDER else 99, x["titre"]))
-    out.append(EPI)
     for var in sorted(k for k in V if k.startswith("LIEN_")):
         p = [x.strip() for x in str(V[var]).split("|")]
         if len(p) >= 2 and re.match(r"https?://", p[1]):
