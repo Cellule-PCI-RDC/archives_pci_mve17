@@ -1,0 +1,34 @@
+name: Mettre à jour les liens qui alimentent l'application
+on:
+  schedule: [{cron: "47 */3 * * *"}]   # toutes les 3 heures
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/**", "sync_*.py"]   # un nouveau workflow ou script de synchronisation : liens recalculés
+permissions: {contents: write}
+concurrency: {group: synchro-liens, cancel-in-progress: false}
+jobs:
+  liens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
+      KOBO_SERVER: ${{ vars.KOBO_SERVER }}
+      VARS_JSON: ${{ toJSON(vars) }}   # toutes les variables du dépôt : chaque KOBO_UID_xxx ou LIEN_xxx devient un lien
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install requests
+      - name: Lire les formulaires reliés à l'application
+        run: python sync_liens.py
+      - name: Publier
+        run: |
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          [ -e liens.json ] || exit 0
+          git add liens.json
+          git commit -m "Liens utiles mis à jour" || exit 0
+          for i in 1 2 3 4 5; do
+            git pull --rebase -q origin "${GITHUB_REF_NAME}" && git push -q && exit 0
+            sleep $((i*7))
+          done
+          echo "Publication impossible après 5 essais"; exit 1
